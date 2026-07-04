@@ -75,6 +75,7 @@ button:before {
   mix-blend-mode: multiply;
   opacity: 0.5;
   z-index: 1;
+  pointer-events: none;
 }
 
 .rim::before {
@@ -84,4 +85,5 @@ button:before {
   box-shadow: inset 0 0 0 1.5px rgb(255 255 255);
   mix-blend-mode: plus-lighter;
   z-index: 1;
+  pointer-events: none;
 }
