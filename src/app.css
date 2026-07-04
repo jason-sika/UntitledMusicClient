@@ -1,0 +1,87 @@
+@font-face {
+  font-family: "InterVariable";
+  src: url("/fonts/Inter41/web/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+}
+
+body {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  all: unset;
+  font-family: "InterVariable", sans-serif !important;
+  margin-block-start: 0px !important;
+  margin-block-end: 0px !important;
+  margin-inline-start: 0px !important;
+  margin-inline-end: 0px !important;
+}
+
+p,
+span {
+  font-family: "InterVariable", sans-serif !important;
+  margin-block-start: 0px !important;
+  margin-block-end: 0px !important;
+  margin-inline-start: 0px !important;
+  margin-inline-end: 0px !important;
+}
+
+button {
+  all: unset;
+  position: relative;
+  cursor: pointer;
+  font-family: "InterVariable", sans-serif;
+  font-size: 1rem;
+  background: linear-gradient(to bottom, #ffffff70, #cecece70);
+  color: rgba(0, 0, 0, 0.7);
+  padding: 7px 20px;
+}
+
+button:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
+  mix-blend-mode: multiply;
+  z-index: 1;
+}
+
+button:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255);
+  mix-blend-mode: plus-lighter;
+  z-index: 1;
+}
+
+.rim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  z-index: 1;
+}
+
+.rim::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255);
+  mix-blend-mode: plus-lighter;
+  z-index: 1;
+}
