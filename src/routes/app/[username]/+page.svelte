@@ -1,9 +1,103 @@
 <script>
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
   import Player from "$lib/components/Player.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
+
   let { data } = $props();
+
+  let currentUser = $state(null);
+  let requestState = $state("none");
+  let friendshipId = $state(null);
+  let working = $state(false);
+  let loadingRelationship = $state(true);
+
+  const isOwnProfile = $derived(currentUser?.username === data.user?.username);
+
+  onMount(async () => {
+    if (data.notFound) return;
+
+    try {
+      const meRes = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        credentials: "include",
+      });
+      const meData = await meRes.json();
+      currentUser = meData?.user ?? null;
+
+      if (currentUser && currentUser.username !== data.user.username) {
+        const friendsRes = await fetch(
+          "https://backend.umc.jasonsika.com/api/friends",
+          {
+            credentials: "include",
+          },
+        );
+        const friendsData = await friendsRes.json();
+
+        const asFriend = friendsData.friends?.find(
+          (f) => f.userId === data.user.id,
+        );
+        const asIncoming = friendsData.incomingRequests?.find(
+          (f) => f.userId === data.user.id,
+        );
+        const asOutgoing = friendsData.outgoingRequests?.find(
+          (f) => f.userId === data.user.id,
+        );
+
+        if (asFriend) {
+          requestState = "friends";
+          friendshipId = asFriend.friendshipId;
+        } else if (asIncoming) {
+          requestState = "incoming";
+          friendshipId = asIncoming.friendshipId;
+        } else if (asOutgoing) {
+          requestState = "pending";
+          friendshipId = asOutgoing.friendshipId;
+        }
+      }
+    } finally {
+      loadingRelationship = false;
+    }
+  });
+
+  async function sendFriendRequest() {
+    if (working) return;
+    working = true;
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/friends", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: data.user.username }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        requestState = "pending";
+        friendshipId = result.friendshipId ?? friendshipId;
+      }
+    } finally {
+      working = false;
+    }
+  }
+
+  async function acceptRequest() {
+    if (working || !friendshipId) return;
+    working = true;
+    try {
+      const res = await fetch(
+        "https://backend.umc.jasonsika.com/api/friends/accept",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ friendshipId }),
+        },
+      );
+      if (res.ok) {
+        requestState = "friends";
+      }
+    } finally {
+      working = false;
+    }
+  }
 </script>
 
 <div class="website">
@@ -31,6 +125,44 @@
             <h1>{data.user.displayname}</h1>
             <p class="username">@{data.user.username}</p>
           </div>
+          <div class="tags">
+            {#each data.user.tags ?? [] as tag}
+              <span
+                class="tag"
+                style={tag.color
+                  ? `background: ${tag.color}20; color: ${tag.color};`
+                  : ""}
+              >
+                {tag.label}
+              </span>
+            {/each}
+          </div>
+
+          {#if !loadingRelationship && !isOwnProfile}
+            <div class="actions">
+              {#if requestState === "friends"}
+                <button class="friendbtn rim" disabled>Friends</button>
+              {:else if requestState === "pending"}
+                <button class="friendbtn rim" disabled>Request Sent</button>
+              {:else if requestState === "incoming"}
+                <button
+                  class="friendbtn rim"
+                  onclick={acceptRequest}
+                  disabled={working}
+                >
+                  {working ? "Accepting..." : "Accept Request"}
+                </button>
+              {:else}
+                <button
+                  class="friendbtn rim"
+                  onclick={sendFriendRequest}
+                  disabled={working}
+                >
+                  {working ? "Sending..." : "Add Friend"}
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     {/if}
@@ -53,24 +185,11 @@
     width: 100% !important;
   }
 
-  .notfound {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100dvh;
-  }
-
-  .profilepage {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-  }
-
   .profilepage {
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-width: 0; /* prevents flex overflow issues with wide content like images */
+    min-width: 0;
   }
 
   .notfound {
@@ -96,6 +215,7 @@
     gap: 1rem;
     padding: 0 2rem;
     margin-top: -40px;
+    flex-wrap: wrap;
   }
 
   .pfp {
@@ -112,5 +232,38 @@
 
   .username {
     opacity: 0.6;
+  }
+
+  .tags {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .tag {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #00000010;
+    color: #000000;
+    white-space: nowrap;
+  }
+
+  .actions {
+    margin-left: auto;
+  }
+
+  .friendbtn {
+    font-size: 14px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+
+  .friendbtn:disabled {
+    cursor: default;
+    opacity: 0.7;
   }
 </style>

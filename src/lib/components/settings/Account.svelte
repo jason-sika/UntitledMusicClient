@@ -159,6 +159,20 @@
       // ignore
     }
   }
+
+  function openDeleteAccountPopup() {
+    if (!user?.id) return;
+    const width = 900;
+    const height = 500;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    window.open(
+      `/auth/deleteaccount?id=${user.id}`,
+      "delete-account",
+      `width=${width},height=${height},left=${left},top=${top}`,
+    );
+  }
 </script>
 
 <div class="pageS">
@@ -232,6 +246,9 @@
 
   <p style="font-size: 10px; width: 100%; text-align: left;">Other</p>
   <button class="logout rim" onclick={handleLogout}>Logout -></button>
+  <button class="delete-account rim" onclick={openDeleteAccountPopup}
+    >Delete Account -></button
+  >
   <p class="wip" style="font-size: 10px; width: 100%; text-align: left;">
     Player Connection
   </p>
@@ -311,6 +328,11 @@
   }
 
   .logout {
+    background: linear-gradient(to bottom, #ffffff70, #edcccc70);
+    color: #621515;
+  }
+
+  .delete-account {
     background: linear-gradient(to bottom, #ffffff70, #edcccc70);
     color: #621515;
   }
