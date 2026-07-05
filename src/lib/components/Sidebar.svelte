@@ -8,7 +8,7 @@
 
   function userprofile() {
     if (user?.username) {
-      goto(`/${user.username}`);
+      goto(`/app/${user.username}`);
     }
   }
 
