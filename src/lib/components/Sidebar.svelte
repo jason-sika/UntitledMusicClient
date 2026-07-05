@@ -5,10 +5,15 @@
 
   let showSettings = $state(false);
   let user = $state(null);
+  let friends = $state([]);
+  let loadingFriends = $state(true);
 
-  function userprofile() {
-    if (user?.username) {
-      goto(`/app/${user.username}`);
+  let activeTopTab = $state("Library");
+  let activeLibraryTab = $state("Playlists");
+
+  function userprofile(username) {
+    if (username) {
+      goto(`/app/${username}`);
     }
   }
 
@@ -21,6 +26,18 @@
       user = data?.user ?? null;
     } catch {
       user = null;
+    }
+
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/friends", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      friends = data?.friends ?? [];
+    } catch {
+      friends = [];
+    } finally {
+      loadingFriends = false;
     }
   });
 </script>
@@ -35,17 +52,21 @@
 {/if}
 
 <div class="sidebar">
-  <div class="you">
+  <div class="you rim">
     <div class="profilePicture rim">
       <img
-        class="profilePicture rim"
+        class="profilePicture"
         src={user?.pfpUrl || "/images/plhd.png"}
         alt="Profile picture"
-        onclick={userprofile}
+        onclick={() => userprofile(user?.username)}
         style="cursor: pointer;"
       />
     </div>
-    <div class="text" onclick={userprofile} style="cursor: pointer;">
+    <div
+      class="text"
+      onclick={() => userprofile(user?.username)}
+      style="cursor: pointer;"
+    >
       <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
       <p class="currentPlayer">
         {user ? `@${user.username}` : ""}
@@ -55,21 +76,112 @@
       >Settings</button
     >
   </div>
+
   <div class="tabview online rim">
-    <div class="tabswitch">
-      <a class="tab active">Home</a>
-      <a class="tab">Library</a>
-      <a class="tab">Search</a>
+    <div
+      class="tabswitch"
+      onwheel={(e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          e.currentTarget.scrollLeft += e.deltaY;
+        }
+      }}
+    >
+      <button
+        class="tab"
+        class:active={activeTopTab === "Library"}
+        onclick={() => (activeTopTab = "Library")}>Library</button
+      >
+      <button
+        class="tab"
+        class:active={activeTopTab === "Friends"}
+        onclick={() => (activeTopTab = "Friends")}>Friends</button
+      >
     </div>
+
+    {#if activeTopTab === "Library"}
+      <div class="tabcontent">
+        <p class="empty-state">Your library will show here.</p>
+      </div>
+    {:else if activeTopTab === "Friends"}
+      <div class="friends">
+        {#if loadingFriends}
+          <p class="empty-state">Loading friends...</p>
+        {:else if friends.length === 0}
+          <p class="empty-state">No friends yet.</p>
+        {:else}
+          {#each friends as friend}
+            <div
+              class="friend you"
+              onclick={() => userprofile(friend.username)}
+            >
+              <div class="profilePicture rim">
+                <img
+                  class="profilePicture rim"
+                  src={friend.pfpUrl || "/images/plhd.png"}
+                  alt="Profile picture"
+                />
+              </div>
+              <div class="text">
+                <h1 class="Name">{friend.displayname}</h1>
+                <p class="subtitle currentPlayer">@{friend.username}</p>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
   </div>
+
   <div class="tabview library rim">
-    <div class="tabswitch">
-      <a class="tab active">Playlists</a>
-      <a class="tab">Albums</a>
-      <a class="tab">Songs</a>
-      <a class="tab">Artists</a>
+    <div
+      class="tabswitch"
+      onwheel={(e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          e.currentTarget.scrollLeft += e.deltaY;
+        }
+      }}
+    >
+      <button
+        class="tab"
+        class:active={activeLibraryTab === "Playlists"}
+        onclick={() => (activeLibraryTab = "Playlists")}>Playlists</button
+      >
+      <button
+        class="tab"
+        class:active={activeLibraryTab === "Albums"}
+        onclick={() => (activeLibraryTab = "Albums")}>Albums</button
+      >
+      <button
+        class="tab"
+        class:active={activeLibraryTab === "Songs"}
+        onclick={() => (activeLibraryTab = "Songs")}>Songs</button
+      >
+      <button
+        class="tab"
+        class:active={activeLibraryTab === "Artists"}
+        onclick={() => (activeLibraryTab = "Artists")}>Artists</button
+      >
     </div>
-    <div class="playlist"></div>
+
+    {#if activeLibraryTab === "Playlists"}
+      <div class="playlist">
+        <p class="empty-state">No playlists yet.</p>
+      </div>
+    {:else if activeLibraryTab === "Albums"}
+      <div class="playlist">
+        <p class="empty-state">No albums yet.</p>
+      </div>
+    {:else if activeLibraryTab === "Songs"}
+      <div class="playlist">
+        <p class="empty-state">No songs yet.</p>
+      </div>
+    {:else if activeLibraryTab === "Artists"}
+      <div class="playlist">
+        <p class="empty-state">No artists yet.</p>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -152,22 +264,77 @@
     gap: 10px;
     width: 100%;
     padding: 20px 20px 10px 20px;
-    overflow: scroll;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  a.tab {
+  .tab {
+    all: unset;
     display: flex;
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    width: 100%;
+    width: fit-content;
     font-family: "InterVariable", sans-serif !important;
     font-size: 24px;
     font-weight: 300;
     opacity: 0.2;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
   }
 
-  a.tab.active {
+  .tab.active {
     opacity: 0.7;
+  }
+
+  .tabcontent {
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .friends {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 4px;
+    padding: 0 10px 10px 10px;
+    overflow-y: auto;
+  }
+
+  .friend {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+  }
+
+  .friend:hover {
+    background: #00000010;
+  }
+
+  .friend .Name {
+    font-size: 14px;
+  }
+
+  .friend .subtitle {
+    font-size: 11px;
+  }
+
+  .empty-state {
+    font-size: 12px;
+    opacity: 0.4;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .playlist {
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
   }
 </style>

@@ -58,6 +58,7 @@ button:after {
   box-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
   mix-blend-mode: multiply;
   z-index: 1;
+  pointer-events: none;
 }
 
 button:before {
@@ -67,6 +68,7 @@ button:before {
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.463);
   mix-blend-mode: plus-lighter;
   z-index: 1;
+  pointer-events: none;
 }
 
 .rim::after {
