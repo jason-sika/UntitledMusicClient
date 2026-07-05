@@ -1,6 +1,34 @@
 <script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
+
+  let checked = $state(false);
+  let button = $state("");
+
+  onMount(async () => {
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        button = "Login";
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!data?.user) {
+        button = "Login";
+      } else {
+        button = "Go to App";
+        checked = true;
+      }
+    } catch (err) {
+      // network error, server down, bad JSON, etc. — fail safe to login
+      button = "Login";
+    }
+  });
 </script>
 
 <div class="website">
@@ -19,7 +47,7 @@
         changing interfaces, with the same features.
       </p>
       <div class="buttonwrapper">
-        <button onclick={() => goto("/app")}>Go To App</button>
+        <button onclick={() => goto("/app")}>{button}</button>
         <button
           onclick={() =>
             window.open(

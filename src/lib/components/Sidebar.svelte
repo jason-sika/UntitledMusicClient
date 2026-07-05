@@ -1,17 +1,59 @@
+<script>
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import Settings from "./Settings.svelte";
+
+  let showSettings = $state(false);
+  let user = $state(null);
+
+  function userprofile() {
+    if (user?.username) {
+      goto(`/${user.username}`);
+    }
+  }
+
+  onMount(async () => {
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      user = data?.user ?? null;
+    } catch {
+      user = null;
+    }
+  });
+</script>
+
+{#if showSettings}
+  <Settings
+    onClose={() => (showSettings = false)}
+    currentDisplayname={user?.displayname ?? ""}
+    currentUsername={user ? `@${user.username}` : "@"}
+    {user}
+  />
+{/if}
+
 <div class="sidebar">
   <div class="you">
-    <img
-      class="profilePicture rim"
-      src="/images/plhd.png"
-      alt="Profile Picture"
-    />
-    <div class="text">
-      <h1 class="Name">Fede P</h1>
-      <p class="currentPlayer">Youtube Music [WIP]</p>
+    <div class="profilePicture rim">
+      <img
+        class="profilePicture rim"
+        src={user?.pfpUrl || "/images/plhd.png"}
+        alt="Profile picture"
+        onclick={userprofile}
+        style="cursor: pointer;"
+      />
     </div>
-    <div class="settings rim">
-      <img src="/images/plhd.png" alt="Settings" />
+    <div class="text" onclick={userprofile} style="cursor: pointer;">
+      <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
+      <p class="currentPlayer">
+        {user ? `@${user.username}` : ""}
+      </p>
     </div>
+    <button class="settings rim" onclick={() => (showSettings = true)}
+      >Settings</button
+    >
   </div>
   <div class="tabview online rim">
     <div class="tabswitch">
@@ -58,6 +100,10 @@
     width: 100%;
   }
 
+  .text {
+    width: 100%;
+  }
+
   .Name {
     font-size: 20px;
     font-weight: 500;
@@ -71,20 +117,19 @@
   }
 
   .profilePicture {
+    position: relative;
     width: 35px;
     height: 35px;
     object-fit: cover;
   }
 
   .settings {
-    width: 35px;
-    height: 35px;
-  }
-
-  .settings img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    font-size: 12px;
+    padding: 5px 10px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: flex;
   }
 
   .tabview {

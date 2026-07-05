@@ -1,6 +1,6 @@
 <div class="player rim">
   <div class="meta">
-    <img class="album-art rim" src="blob:" alt="Album Art" />
+    <img class="albumArt rim" src="/images/plhd.png" alt="Album Art" />
     <div class="text">
       <h1 class="title">Track Title</h1>
       <p class="artist">Artist Name</p>
@@ -33,5 +33,10 @@
     width: 100%;
     background: linear-gradient(to bottom, #ffffff70, #cecece70);
     color: #000000;
+  }
+
+  .albumArt {
+    width: 20px;
+    height: 20px;
   }
 </style>
