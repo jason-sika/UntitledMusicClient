@@ -4,6 +4,7 @@ function createPresenceStore() {
     const { subscribe, update, set } = writable({});
     let eventSource = null;
     let visibilityHandler = null;
+    let exitHandler = null;
 
     function reportAway(away) {
         fetch('https://backend.umc.jasonsika.com/api/presence/away', {
@@ -11,6 +12,16 @@ function createPresenceStore() {
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ away }),
+        }).catch(() => { });
+    }
+
+    function reportOfflineOnExit() {
+        fetch('https://backend.umc.jasonsika.com/api/presence/status', {
+            method: 'POST',
+            credentials: 'include',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'offline' }),
         }).catch(() => { });
     }
 
@@ -34,6 +45,10 @@ function createPresenceStore() {
 
         visibilityHandler = () => reportAway(document.hidden);
         document.addEventListener('visibilitychange', visibilityHandler);
+
+        exitHandler = () => reportOfflineOnExit();
+        window.addEventListener('pagehide', exitHandler);
+        window.addEventListener('beforeunload', exitHandler);
     }
 
     function disconnect() {
@@ -42,6 +57,11 @@ function createPresenceStore() {
         if (visibilityHandler) {
             document.removeEventListener('visibilitychange', visibilityHandler);
             visibilityHandler = null;
+        }
+        if (exitHandler) {
+            window.removeEventListener('pagehide', exitHandler);
+            window.removeEventListener('beforeunload', exitHandler);
+            exitHandler = null;
         }
         set({});
     }
