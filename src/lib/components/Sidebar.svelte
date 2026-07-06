@@ -13,6 +13,7 @@
 
   let activeTopTab = $state("Friends");
   let activeLibraryTab = $state("Playlists");
+  let hasLoadedNotifications = $state(false);
 
   // search state
   let query = $state("");
@@ -142,24 +143,6 @@
     });
   }
 
-  async function loadNotifications() {
-    loadingNotifications = true;
-    try {
-      const res = await fetch(
-        "https://backend.umc.jasonsika.com/api/notifications",
-        {
-          credentials: "include",
-        },
-      );
-      const data = await res.json();
-      notifications = data?.notifications ?? [];
-    } catch {
-      notifications = [];
-    } finally {
-      loadingNotifications = false;
-    }
-  }
-
   async function markNotificationRead(notification) {
     if (notification.read) return;
 
@@ -200,7 +183,7 @@
   $effect(() => {
     if (
       activeTopTab === "Notification" &&
-      notifications.length === 0 &&
+      !hasLoadedNotifications &&
       !loadingNotifications
     ) {
       loadNotifications();
@@ -259,6 +242,33 @@
       searching = false;
     }
   }
+
+  async function loadNotifications() {
+    loadingNotifications = true;
+    try {
+      const res = await fetch(
+        "https://backend.umc.jasonsika.com/api/notifications",
+        { credentials: "include" },
+      );
+      const data = await res.json();
+      notifications = data?.notifications ?? [];
+    } catch {
+      notifications = [];
+    } finally {
+      loadingNotifications = false;
+      hasLoadedNotifications = true;
+    }
+  }
+
+  $effect(() => {
+    if (
+      activeTopTab === "Notification" &&
+      !hasLoadedNotifications &&
+      !loadingNotifications
+    ) {
+      loadNotifications();
+    }
+  });
 
   async function respondToRequest(notification, accept) {
     const friendshipId = notification.data?.friendshipId;
@@ -849,7 +859,7 @@
     align-items: center;
     background: linear-gradient(to bottom, #ffffff70, #eeeeee70);
     gap: 10px;
-    height: 100%;
+    height: 45.8% !important;
     width: 100%;
   }
 
@@ -860,6 +870,7 @@
     align-items: center;
     gap: 10px;
     width: 100%;
+    height: 80px !important;
     padding: 20px 20px 10px 20px;
     overflow-x: auto;
     scrollbar-width: none;
@@ -960,8 +971,9 @@
     flex-direction: column;
     width: 100%;
     height: 100%;
-    gap: 0px;
+    gap: 4px;
     padding: 1px 0px 0px 0px;
+    overflow-y: auto;
   }
 
   .searchinput {
@@ -1021,7 +1033,7 @@
     width: 100%;
     height: 100%;
     gap: 4px;
-    padding: 1px 10px 10px 10px;
+    padding: 1px 0px 0px 0px;
     overflow-y: auto;
   }
 
