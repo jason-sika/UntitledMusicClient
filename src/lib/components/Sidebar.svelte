@@ -808,6 +808,7 @@
     width: 35px;
     height: 35px;
     object-fit: cover;
+    background-color: white;
   }
 
   /* text variant used inside notification/friend/search rows,

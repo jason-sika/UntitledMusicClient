@@ -313,7 +313,8 @@
     width: 100px;
     height: 100px;
     object-fit: cover;
-    border: 4px solid white;
+    outline: 8px solid white;
+    background-color: #efefef;
   }
 
   .info h1 {
