@@ -1,7 +1,9 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import Settings from "./Settings.svelte";
+  import { presence } from "$lib/stores/presence";
+
   const unreadCount = $derived(notifications.filter((n) => !n.read).length);
 
   let showSettings = $state(false);
@@ -19,13 +21,47 @@
   let searchDebounce;
   let notifications = $state([]);
   let loadingNotifications = $state(false);
+  let onlineStatus = $derived($presence);
+
+  const ACTIONABLE_TYPES = new Set(["friend_request"]);
 
   const notificationIcons = {
     friend_request: "/images/notifications/friendrequest.png",
     friend_removal: "/images/notifications/friendremoval.png",
+    friend_declined: "/images/notifications/friendremoval.png", // reuse until you have a dedicated asset
     account_created: "/images/notifications/accountcreated.png",
     tag_assigned: "/images/notifications/tagassigned.png",
   };
+
+  function isActionable(notification) {
+    return (
+      ACTIONABLE_TYPES.has(notification.type) && notification.data?.friendshipId
+    );
+  }
+
+  async function handleNotificationClick(notification) {
+    if (isActionable(notification)) {
+      // actionable notifications only get marked read on click —
+      // Accept/Decline are what actually resolve/remove them
+      markNotificationRead(notification);
+      return;
+    }
+
+    // non-actionable: clicking deletes it outright
+    notifications = notifications.filter((n) => n.id !== notification.id);
+
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+    } catch {
+      // could add a toast here; notification is already gone from the UI
+    }
+  }
 
   function scrollTabToStart(e) {
     e.currentTarget.scrollIntoView({
@@ -199,6 +235,8 @@
   }
 
   onMount(async () => {
+    presence.connect();
+
     try {
       const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
         credentials: "include",
@@ -220,6 +258,10 @@
     } finally {
       loadingFriends = false;
     }
+  });
+
+  onDestroy(() => {
+    presence.disconnect();
   });
 </script>
 
@@ -312,12 +354,15 @@
               class="friend you"
               onclick={() => userprofile(friend.username)}
             >
-              <div class="profilePicture rim">
+              <div class="profilePicture rim" style="position: relative;">
                 <img
                   class="profilePicture rim"
                   src={friend.pfpUrl || "/images/plhd.png"}
                   alt="Profile picture"
                 />
+                {#if onlineStatus[friend.id]}
+                  <span class="online-dot"></span>
+                {/if}
               </div>
               <div class="text notiftext">
                 <h1 class="Name">{friend.displayname}</h1>
@@ -361,12 +406,15 @@
                   />
                 {/if}
                 <div class="someone you">
-                  <div class="profilePicture rim">
+                  <div class="profilePicture rim" style="position: relative;">
                     <img
                       class="profilePicture rim"
                       src={result.pfpUrl || "/images/plhd.png"}
                       alt="Profile picture"
                     />
+                    {#if result.online}
+                      <span class="online-dot"></span>
+                    {/if}
                   </div>
                   <div class="text notiftext">
                     <h1 class="Name">{result.displayname}</h1>
@@ -390,7 +438,7 @@
               <div
                 class="notification rim"
                 class:unread={!notification.read}
-                onclick={() => markNotificationRead(notification)}
+                onclick={() => handleNotificationClick(notification)}
               >
                 <div class="stackH">
                   <div class="notification_image">
@@ -716,6 +764,22 @@
     background: #e33;
     margin-left: 4px;
     vertical-align: middle;
+  }
+
+  .online-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #2ecc71;
+    border: 2px solid #ffffff;
+  }
+
+  .pfpwrap {
+    position: relative;
+    flex-shrink: 0;
   }
 
   /* ============================================================

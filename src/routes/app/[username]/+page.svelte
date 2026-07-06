@@ -4,6 +4,7 @@
   import Sidebar from "$lib/components/Sidebar.svelte";
 
   let { data } = $props();
+  let isOnline = $state(false);
 
   let currentUser = $state(null);
   let requestState = $state("none");
@@ -15,6 +16,13 @@
 
   onMount(async () => {
     if (data.notFound) return;
+
+    fetch(`https://backend.umc.jasonsika.com/api/presence/${data.user.id}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => (isOnline = !!d.online))
+      .catch(() => {});
 
     try {
       const meRes = await fetch("https://backend.umc.jasonsika.com/api/me", {
@@ -58,6 +66,34 @@
     }
   });
 
+  onMount(() => {
+    const handler = (e) => {
+      if (
+        e.data?.type === "friend-removed" &&
+        e.data.friendshipId === friendshipId
+      ) {
+        requestState = "none";
+        friendshipId = null;
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  });
+
+  function openRemoveFriendPopup() {
+    if (!friendshipId) return;
+    const width = 420;
+    const height = 320;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    window.open(
+      `/friends/remove?id=${friendshipId}&name=${encodeURIComponent(data.user.displayname)}`,
+      "remove-friend",
+      `width=${width},height=${height},left=${left},top=${top}`,
+    );
+  }
+
   async function sendFriendRequest() {
     if (working) return;
     working = true;
@@ -98,6 +134,28 @@
       working = false;
     }
   }
+
+  async function removeFriend() {
+    if (working || !friendshipId) return;
+    working = true;
+    try {
+      const res = await fetch(
+        "https://backend.umc.jasonsika.com/api/friends/remove",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ friendshipId }),
+        },
+      );
+      if (res.ok) {
+        requestState = "none";
+        friendshipId = null;
+      }
+    } finally {
+      working = false;
+    }
+  }
 </script>
 
 <div class="website">
@@ -116,11 +174,16 @@
             : 'none'}; object-fit: cover;"
         ></div>
         <div class="profileheader">
-          <img
-            class="pfp rim"
-            src={data.user.pfpUrl || "/images/plhd.png"}
-            alt="Profile picture"
-          />
+          <div class="pfpwrap">
+            <img
+              class="pfp rim"
+              src={data.user.pfpUrl || "/images/plhd.png"}
+              alt="Profile picture"
+            />
+            {#if isOnline}
+              <span class="online-dot"></span>
+            {/if}
+          </div>
           <div class="info">
             <h1>{data.user.displayname}</h1>
             <p class="username">@{data.user.username}</p>
@@ -141,7 +204,9 @@
           {#if !loadingRelationship && !isOwnProfile}
             <div class="actions">
               {#if requestState === "friends"}
-                <button class="friendbtn rim" disabled>Friends</button>
+                <button class="friendbtn rim" onclick={openRemoveFriendPopup}>
+                  Remove Friend
+                </button>
               {:else if requestState === "pending"}
                 <button class="friendbtn rim" disabled>Request Sent</button>
               {:else if requestState === "incoming"}
@@ -265,5 +330,21 @@
   .friendbtn:disabled {
     cursor: default;
     opacity: 0.7;
+  }
+
+  .pfpwrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .online-dot {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #2ecc71;
+    border: 3px solid white;
   }
 </style>
