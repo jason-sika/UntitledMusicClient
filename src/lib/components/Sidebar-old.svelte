@@ -70,19 +70,6 @@
     }
   }
 
-  async function dismissNotification(e, notification) {
-    e.stopPropagation(); // don't trigger handleNotificationClick underneath
-    notifications = notifications.filter((n) => n.id !== notification.id);
-    try {
-      await fetch(
-        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
-        { method: "DELETE", credentials: "include" },
-      );
-    } catch {
-      // could add a toast here
-    }
-  }
-
   async function clearAllNotifications() {
     if (notifications.length === 0) return;
     const previous = notifications;
@@ -95,6 +82,19 @@
       });
     } catch {
       notifications = previous; // roll back on failure
+    }
+  }
+
+  async function dismissNotification(e, notification) {
+    e.stopPropagation(); // don't trigger handleNotificationClick underneath
+    notifications = notifications.filter((n) => n.id !== notification.id);
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        { method: "DELETE", credentials: "include" },
+      );
+    } catch {
+      // could add a toast here
     }
   }
 
@@ -176,6 +176,17 @@
     if (activeTopTab === "Notification" && notifications.some((n) => !n.read)) {
       const timeout = setTimeout(markAllRead, 1000);
       return () => clearTimeout(timeout);
+    }
+  });
+
+  // fetch feed only the first time that tab is opened
+  $effect(() => {
+    if (
+      activeTopTab === "Notification" &&
+      notifications.length === 0 &&
+      !loadingNotifications
+    ) {
+      loadNotifications();
     }
   });
 
@@ -472,11 +483,15 @@
     {:else if activeTopTab === "Notification"}
       <div class="feed">
         {#if notifications.length > 0}
-          <button class="clear-all" onclick={clearAllNotifications}>
+          <button
+            class="clear-all"
+            onclick={clearAllNotifications}
+            style="width: 100%;"
+          >
             Clear all
           </button>
         {/if}
-        <div class="list rim">
+        <div class="feed rim">
           {#if loadingNotifications}
             <p class="empty-state">Loading...</p>
           {:else if notifications.length === 0}
@@ -488,13 +503,6 @@
                 class:unread={!notification.read}
                 onclick={() => handleNotificationClick(notification)}
               >
-                <button
-                  class="dismiss-btn"
-                  onclick={(e) => dismissNotification(e, notification)}
-                  aria-label="Dismiss"
-                >
-                  ×
-                </button>
                 <div class="stackH">
                   <div class="notification_image">
                     <img
@@ -541,6 +549,14 @@
                     </button>
                   </div>
                 {/if}
+                <button
+                  class="dismiss-btn"
+                  onclick={(e) => dismissNotification(e, notification)}
+                  aria-label="Dismiss"
+                  style="font-size: 13px;"
+                >
+                  × Delete and dismiss
+                </button>
               </div>
             {/each}
           {/if}
@@ -847,6 +863,17 @@
     vertical-align: middle;
   }
 
+  .online-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #2ecc71;
+    border: 2px solid #ffffff;
+  }
+
   .status-icon {
     position: absolute;
     bottom: -4px;
@@ -865,7 +892,7 @@
     width: 100%;
     height: 100%;
     gap: 4px;
-    padding: 1px 0px 10px 0px;
+    padding: 1px 10px 10px 10px;
     overflow-y: auto;
   }
 
@@ -906,7 +933,7 @@
     width: 100%;
     height: 100%;
     gap: 0px;
-    padding: 1px 0px 0px 0px;
+    padding: 1px 10px 10px 10px;
   }
 
   .searchinput {
@@ -949,7 +976,6 @@
     padding: 10px 10px;
     cursor: pointer;
     transition: background 0.15s ease;
-    background: none !important;
     height: fit-content;
   }
 
@@ -968,29 +994,6 @@
     gap: 4px;
     padding: 1px 10px 10px 10px;
     overflow-y: auto;
-  }
-
-  .list {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    gap: 4px;
-    padding: 1px 0px 10px 0px;
-    overflow-y: auto;
-  }
-
-  .clear-all {
-    align-self: flex-end;
-    font-size: 12px;
-    opacity: 0.5;
-    padding: 4px 8px;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-  }
-
-  .clear-all:hover {
-    opacity: 0.9;
   }
 
   .notification {
@@ -1015,28 +1018,6 @@
 
   .notification.unread:hover {
     background: #f5e6cc;
-  }
-
-  .dismiss-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    line-height: 1;
-    opacity: 0.3;
-    background: none;
-    border-radius: 50%;
-    z-index: 2;
-  }
-
-  .dismiss-btn:hover {
-    opacity: 0.8;
-    background: #00000010;
   }
 
   .stackH {

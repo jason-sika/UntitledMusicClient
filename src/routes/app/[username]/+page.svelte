@@ -1,13 +1,13 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import Player from "$lib/components/Player.svelte";
-  import Sidebar from "$lib/components/Sidebar.svelte";
+  import Sidebar from "$lib/components/Sidebar-old.svelte";
   import { presence } from "$lib/stores/presence";
+
+  let { data } = $props();
 
   let statusMap = $derived($presence);
   let status = $derived(statusMap[data.user?.id] ?? "offline");
-
-  let { data } = $props();
 
   let currentUser = $state(null);
   let requestState = $state("none");
@@ -23,51 +23,75 @@
     offline: "/images/status/offline.png",
   };
 
-  onMount(async () => {
-    if (data.notFound) return;
+  // re-fetch relationship state whenever the profile we're looking at changes —
+  // onMount only fires once per component instance, and SvelteKit reuses this
+  // instance when navigating between /app/[username] routes
+  $effect(() => {
+    const targetId = data.user?.id;
+    if (!targetId || data.notFound) return;
 
-    presence.watch(data.user.id);
+    requestState = "none";
+    friendshipId = null;
+    loadingRelationship = true;
 
-    try {
-      const meRes = await fetch("https://backend.umc.jasonsika.com/api/me", {
-        credentials: "include",
-      });
-      const meData = await meRes.json();
-      currentUser = meData?.user ?? null;
+    let cancelled = false;
 
-      if (currentUser && currentUser.username !== data.user.username) {
-        const friendsRes = await fetch(
-          "https://backend.umc.jasonsika.com/api/friends",
-          {
-            credentials: "include",
-          },
-        );
-        const friendsData = await friendsRes.json();
+    (async () => {
+      try {
+        const meRes = await fetch("https://backend.umc.jasonsika.com/api/me", {
+          credentials: "include",
+        });
+        const meData = await meRes.json();
+        if (cancelled) return;
+        currentUser = meData?.user ?? null;
 
-        const asFriend = friendsData.friends?.find(
-          (f) => f.userId === data.user.id,
-        );
-        const asIncoming = friendsData.incomingRequests?.find(
-          (f) => f.userId === data.user.id,
-        );
-        const asOutgoing = friendsData.outgoingRequests?.find(
-          (f) => f.userId === data.user.id,
-        );
+        if (currentUser && currentUser.username !== data.user.username) {
+          const friendsRes = await fetch(
+            "https://backend.umc.jasonsika.com/api/friends",
+            { credentials: "include" },
+          );
+          const friendsData = await friendsRes.json();
+          if (cancelled) return;
 
-        if (asFriend) {
-          requestState = "friends";
-          friendshipId = asFriend.friendshipId;
-        } else if (asIncoming) {
-          requestState = "incoming";
-          friendshipId = asIncoming.friendshipId;
-        } else if (asOutgoing) {
-          requestState = "pending";
-          friendshipId = asOutgoing.friendshipId;
+          const asFriend = friendsData.friends?.find(
+            (f) => f.userId === targetId,
+          );
+          const asIncoming = friendsData.incomingRequests?.find(
+            (f) => f.userId === targetId,
+          );
+          const asOutgoing = friendsData.outgoingRequests?.find(
+            (f) => f.userId === targetId,
+          );
+
+          if (asFriend) {
+            requestState = "friends";
+            friendshipId = asFriend.friendshipId;
+          } else if (asIncoming) {
+            requestState = "incoming";
+            friendshipId = asIncoming.friendshipId;
+          } else if (asOutgoing) {
+            requestState = "pending";
+            friendshipId = asOutgoing.friendshipId;
+          }
         }
+      } finally {
+        if (!cancelled) loadingRelationship = false;
       }
-    } finally {
-      loadingRelationship = false;
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  // watch this specific profile's live status; re-subscribe whenever the
+  // profile being viewed changes, and unwatch the previous one automatically
+  $effect(() => {
+    const targetId = data.user?.id;
+    if (!targetId || data.notFound) return;
+
+    presence.watch(targetId);
+    return () => presence.unwatch(targetId);
   });
 
   onMount(() => {
@@ -82,10 +106,6 @@
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  });
-
-  onDestroy(() => {
-    if (data.user?.id) presence.unwatch(data.user.id);
   });
 
   function openRemoveFriendPopup() {

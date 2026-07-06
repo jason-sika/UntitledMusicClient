@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import Player from "$lib/components/Player.svelte";
-  import Sidebar from "$lib/components/Sidebar.svelte";
+  import Sidebar from "$lib/components/Sidebar-old.svelte";
 
   let checked = $state(false);
 
