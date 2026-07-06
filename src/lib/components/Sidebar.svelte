@@ -21,6 +21,7 @@
   let searchDebounce;
   let notifications = $state([]);
   let loadingNotifications = $state(false);
+  /** @type {Record<string, "online" | "away" | "dnd" | "offline">} */
   let onlineStatus = $derived($presence);
 
   const ACTIONABLE_TYPES = new Set(["friend_request"]);
@@ -39,6 +40,41 @@
     dnd: "/images/status/dnd.png",
     offline: "/images/status/offline.png",
   };
+
+  /** @param {{ userId?: string, id?: string } | null | undefined} person */
+  function presenceUserId(person) {
+    return person?.userId ?? person?.id ?? null;
+  }
+
+  /**
+   * @param {{ userId?: string, id?: string, status?: string } | null | undefined} person
+   * @returns {"online" | "away" | "dnd" | "offline"}
+   */
+  function presenceStatus(person) {
+    const userId = presenceUserId(person);
+    const status = (userId && onlineStatus[userId]) || person?.status;
+    if (
+      status === "online" ||
+      status === "away" ||
+      status === "dnd" ||
+      status === "offline"
+    ) {
+      return status;
+    }
+    return "offline";
+  }
+
+  /** @param {{ userId?: string, id?: string } | null | undefined} person */
+  function watchPresence(person) {
+    const userId = presenceUserId(person);
+    if (userId) presence.watch(userId);
+  }
+
+  /** @param {{ userId?: string, id?: string } | null | undefined} person */
+  function unwatchPresence(person) {
+    const userId = presenceUserId(person);
+    if (userId) presence.unwatch(userId);
+  }
 
   function isActionable(notification) {
     return (
@@ -210,7 +246,13 @@
         { credentials: "include" },
       );
       const data = await res.json();
-      searchResults = data.users || [];
+      const newResults = data.users || [];
+
+      // unwatch whoever was previously shown, watch the new batch
+      searchResults.forEach(unwatchPresence);
+      newResults.forEach(watchPresence);
+
+      searchResults = newResults;
     } catch {
       searchResults = [];
     } finally {
@@ -244,7 +286,9 @@
             },
           );
           const data = await friendsRes.json();
-          friends = data?.friends ?? [];
+          const newFriends = data?.friends ?? [];
+          newFriends.forEach(watchPresence);
+          friends = newFriends;
         }
       }
     } catch {
@@ -277,6 +321,7 @@
       });
       const data = await res.json();
       friends = data?.friends ?? [];
+      friends.forEach(watchPresence);
     } catch {
       friends = [];
     } finally {
@@ -285,6 +330,8 @@
   });
 
   onDestroy(() => {
+    friends.forEach(unwatchPresence);
+    searchResults.forEach(unwatchPresence);
     presence.disconnect();
   });
 </script>
@@ -401,7 +448,7 @@
                 />
                 <img
                   class="status-icon"
-                  src={statusIcons[onlineStatus[friend.id] || "offline"]}
+                  src={statusIcons[presenceStatus(friend)]}
                   alt=""
                 />
               </div>
@@ -455,7 +502,7 @@
                     />
                     <img
                       class="status-icon"
-                      src={statusIcons[result.status || "offline"]}
+                      src={statusIcons[presenceStatus(result)]}
                       alt=""
                     />
                   </div>
@@ -778,6 +825,13 @@
     z-index: 1;
   }
 
+  .notiftext:hover {
+    padding: 0px !important;
+    height: 100%;
+    display: block;
+    z-index: 1;
+  }
+
   .notiftext .Name {
     text-overflow: clip !important;
   }
@@ -865,7 +919,7 @@
     width: 100%;
     height: 100%;
     gap: 4px;
-    padding: 1px 0px 10px 0px;
+    padding: 1px 0px 20px 0px;
     overflow-y: auto;
   }
 
@@ -875,7 +929,7 @@
     flex-direction: row;
     justify-content: start;
     align-items: center;
-    padding-inline: 10px;
+    padding-inline: 20px;
     padding-block: 5px;
     background: none !important;
     gap: 10px;
@@ -946,7 +1000,7 @@
     flex-direction: row;
     align-items: center;
     gap: 10px;
-    padding: 10px 10px;
+    padding: 10px 20px;
     cursor: pointer;
     transition: background 0.15s ease;
     background: none !important;

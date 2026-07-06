@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import Player from "$lib/components/Player.svelte";
-  import Sidebar from "$lib/components/Sidebar-old.svelte";
+  import Sidebar from "$lib/components/Sidebar.svelte";
   import { presence } from "$lib/stores/presence";
 
   let { data } = $props();
