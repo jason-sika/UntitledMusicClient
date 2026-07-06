@@ -1,10 +1,13 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import Player from "$lib/components/Player.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
+  import { presence } from "$lib/stores/presence";
+
+  let statusMap = $derived($presence);
+  let status = $derived(statusMap[data.user?.id] ?? "offline");
 
   let { data } = $props();
-  let isOnline = $state(false);
 
   let currentUser = $state(null);
   let requestState = $state("none");
@@ -13,16 +16,17 @@
   let loadingRelationship = $state(true);
 
   const isOwnProfile = $derived(currentUser?.username === data.user?.username);
+  const statusIcons = {
+    online: "/images/status/online.png",
+    away: "/images/status/away.png",
+    dnd: "/images/status/dnd.png",
+    offline: "/images/status/offline.png",
+  };
 
   onMount(async () => {
     if (data.notFound) return;
 
-    fetch(`https://backend.umc.jasonsika.com/api/presence/${data.user.id}`, {
-      credentials: "include",
-    })
-      .then((r) => r.json())
-      .then((d) => (isOnline = !!d.online))
-      .catch(() => {});
+    presence.watch(data.user.id);
 
     try {
       const meRes = await fetch("https://backend.umc.jasonsika.com/api/me", {
@@ -78,6 +82,10 @@
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
+  });
+
+  onDestroy(() => {
+    if (data.user?.id) presence.unwatch(data.user.id);
   });
 
   function openRemoveFriendPopup() {
@@ -180,9 +188,7 @@
               src={data.user.pfpUrl || "/images/plhd.png"}
               alt="Profile picture"
             />
-            {#if isOnline}
-              <span class="online-dot"></span>
-            {/if}
+            <img class="status-icon" src={statusIcons[status]} alt="" />
           </div>
           <div class="info">
             <h1>{data.user.displayname}</h1>
@@ -337,14 +343,12 @@
     flex-shrink: 0;
   }
 
-  .online-dot {
+  .status-icon {
     position: absolute;
-    bottom: 6px;
-    right: 6px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #2ecc71;
-    border: 3px solid white;
+    bottom: -5px;
+    right: -15px;
+    width: 35px;
+    height: 35px;
+    z-index: 20;
   }
 </style>

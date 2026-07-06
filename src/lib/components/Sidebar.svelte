@@ -33,6 +33,13 @@
     tag_assigned: "/images/notifications/tagassigned.png",
   };
 
+  const statusIcons = {
+    online: "/images/status/online.png",
+    away: "/images/status/away.png",
+    dnd: "/images/status/dnd.png",
+    offline: "/images/status/offline.png",
+  };
+
   function isActionable(notification) {
     return (
       ACTIONABLE_TYPES.has(notification.type) && notification.data?.friendshipId
@@ -60,6 +67,34 @@
       );
     } catch {
       // could add a toast here; notification is already gone from the UI
+    }
+  }
+
+  async function clearAllNotifications() {
+    if (notifications.length === 0) return;
+    const previous = notifications;
+    notifications = []; // optimistic
+
+    try {
+      await fetch("https://backend.umc.jasonsika.com/api/notifications", {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      notifications = previous; // roll back on failure
+    }
+  }
+
+  async function dismissNotification(e, notification) {
+    e.stopPropagation(); // don't trigger handleNotificationClick underneath
+    notifications = notifications.filter((n) => n.id !== notification.id);
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        { method: "DELETE", credentials: "include" },
+      );
+    } catch {
+      // could add a toast here
     }
   }
 
@@ -296,9 +331,24 @@
           {user ? `@${user.username}` : ""}
         </p>
       </div>
-      <button class="settings rim" onclick={() => (showSettings = true)}
-        >Settings</button
+      <button class="settings" onclick={() => (showSettings = true)}>
+        <img class="status-icon2" src="/images/settings.png" alt="" /></button
       >
+      <div class="select rim">
+        <img
+          class="status-icon2"
+          src={statusIcons[user?.status ?? "online"]}
+          alt=""
+        />
+        <select
+          onchange={(e) => presence.setStatus(e.target.value)}
+          value={user?.status ?? "online"}
+        >
+          <option value="online">Online</option>
+          <option value="away">Away</option>
+          <option value="dnd">Do Not Disturb</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -360,9 +410,11 @@
                   src={friend.pfpUrl || "/images/plhd.png"}
                   alt="Profile picture"
                 />
-                {#if onlineStatus[friend.id]}
-                  <span class="online-dot"></span>
-                {/if}
+                <img
+                  class="status-icon"
+                  src={statusIcons[onlineStatus[friend.id] || "offline"]}
+                  alt=""
+                />
               </div>
               <div class="text notiftext">
                 <h1 class="Name">{friend.displayname}</h1>
@@ -412,9 +464,11 @@
                       src={result.pfpUrl || "/images/plhd.png"}
                       alt="Profile picture"
                     />
-                    {#if result.online}
-                      <span class="online-dot"></span>
-                    {/if}
+                    <img
+                      class="status-icon"
+                      src={statusIcons[result.status || "offline"]}
+                      alt=""
+                    />
                   </div>
                   <div class="text notiftext">
                     <h1 class="Name">{result.displayname}</h1>
@@ -428,6 +482,15 @@
       </div>
     {:else if activeTopTab === "Notification"}
       <div class="feed">
+        {#if notifications.length > 0}
+          <button
+            class="clear-all"
+            onclick={clearAllNotifications}
+            style="width: 100%;"
+          >
+            Clear all
+          </button>
+        {/if}
         <div class="feed rim">
           {#if loadingNotifications}
             <p class="empty-state">Loading...</p>
@@ -486,6 +549,14 @@
                     </button>
                   </div>
                 {/if}
+                <button
+                  class="dismiss-btn"
+                  onclick={(e) => dismissNotification(e, notification)}
+                  aria-label="Dismiss"
+                  style="font-size: 13px;"
+                >
+                  × Delete and dismiss
+                </button>
               </div>
             {/each}
           {/if}
@@ -620,6 +691,33 @@
     display: flex;
     pointer-events: all;
     opacity: 1 !important;
+  }
+
+  .select {
+    position: relative;
+    font-size: 12px;
+    padding: 5px 10px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: flex;
+    pointer-events: all;
+    opacity: 1 !important;
+  }
+
+  .select select {
+    all: unset;
+    position: absolute;
+    height: 100%;
+    width: 100% !important;
+    opacity: 0;
+  }
+
+  .status-icon2 {
+    position: relative;
+    width: 15px;
+    height: 15px;
+    z-index: 20;
   }
 
   /* ============================================================
@@ -776,9 +874,13 @@
     border: 2px solid #ffffff;
   }
 
-  .pfpwrap {
-    position: relative;
-    flex-shrink: 0;
+  .status-icon {
+    position: absolute;
+    bottom: -4px;
+    right: -6px;
+    width: 15px;
+    height: 15px;
+    z-index: 20;
   }
 
   /* ============================================================

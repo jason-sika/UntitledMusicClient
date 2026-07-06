@@ -174,7 +174,7 @@
     background-color: #ffffff;
     height: 100dvh !important;
     width: 100dvw !important;
-    z-index: 10;
+    z-index: 100;
     animation: fadein 0.2s ease-in;
   }
 
