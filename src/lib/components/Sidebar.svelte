@@ -644,7 +644,6 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    background: linear-gradient(to bottom, #ffffff, #eeeeee);
     transition: all 1s ease;
     padding-right: 20px;
     z-index: 2;
