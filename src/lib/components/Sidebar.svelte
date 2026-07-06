@@ -3,8 +3,15 @@
   import { goto } from "$app/navigation";
   import Settings from "./Settings.svelte";
   import { presence } from "$lib/stores/presence";
+  import PongModal from "./PongModal.svelte";
+  import PingModal from "./PingModal.svelte";
+  import { notifications as notificationsStore } from "$lib/stores/notifications";
 
-  const unreadCount = $derived(notifications.filter((n) => !n.read).length);
+  let notifications = $derived($notificationsStore);
+
+  let pingAgainTarget = $state(null);
+
+  let pongTarget = $state(null); // the notification currently being replied to
 
   let showSettings = $state(false);
   let user = $state(null);
@@ -20,19 +27,21 @@
   let searchResults = $state([]);
   let searching = $state(false);
   let searchDebounce;
-  let notifications = $state([]);
   let loadingNotifications = $state(false);
   /** @type {Record<string, "online" | "away" | "dnd" | "offline">} */
   let onlineStatus = $derived($presence);
+  const unreadCount = $derived(notifications.filter((n) => !n.read).length);
 
-  const ACTIONABLE_TYPES = new Set(["friend_request"]);
+  const ACTIONABLE_TYPES = new Set(["friend_request", "ping", "pong"]);
 
   const notificationIcons = {
     friend_request: "/images/notifications/friendrequest.png",
     friend_removal: "/images/notifications/friendremoval.png",
-    friend_declined: "/images/notifications/friendremoval.png", // reuse until you have a dedicated asset
+    friend_declined: "/images/notifications/friendremoval.png",
     account_created: "/images/notifications/accountcreated.png",
     tag_assigned: "/images/notifications/tagassigned.png",
+    ping: "/images/notifications/ping.png", // your own asset
+    pong: "/images/notifications/pong.png", // your own asset
   };
 
   const statusIcons = {
@@ -41,6 +50,8 @@
     dnd: "/images/status/dnd.png",
     offline: "/images/status/offline.png",
   };
+
+  const MAX_PING_LENGTH = 240;
 
   /** @param {{ userId?: string, id?: string } | null | undefined} person */
   function presenceUserId(person) {
@@ -83,58 +94,6 @@
     );
   }
 
-  async function handleNotificationClick(notification) {
-    if (isActionable(notification)) {
-      // actionable notifications only get marked read on click —
-      // Accept/Decline are what actually resolve/remove them
-      markNotificationRead(notification);
-      return;
-    }
-
-    // non-actionable: clicking deletes it outright
-    notifications = notifications.filter((n) => n.id !== notification.id);
-
-    try {
-      await fetch(
-        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        },
-      );
-    } catch {
-      // could add a toast here; notification is already gone from the UI
-    }
-  }
-
-  async function dismissNotification(e, notification) {
-    e.stopPropagation(); // don't trigger handleNotificationClick underneath
-    notifications = notifications.filter((n) => n.id !== notification.id);
-    try {
-      await fetch(
-        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
-        { method: "DELETE", credentials: "include" },
-      );
-    } catch {
-      // could add a toast here
-    }
-  }
-
-  async function clearAllNotifications() {
-    if (notifications.length === 0) return;
-    const previous = notifications;
-    notifications = []; // optimistic
-
-    try {
-      await fetch("https://backend.umc.jasonsika.com/api/notifications", {
-        method: "DELETE",
-        credentials: "include",
-      });
-    } catch {
-      notifications = previous; // roll back on failure
-    }
-  }
-
   function scrollTabToStart(e) {
     e.currentTarget.scrollIntoView({
       inline: "start",
@@ -142,53 +101,6 @@
       behavior: "smooth",
     });
   }
-
-  async function markNotificationRead(notification) {
-    if (notification.read) return;
-
-    // optimistic update
-    notifications = notifications.map((n) =>
-      n.id === notification.id ? { ...n, read: true } : n,
-    );
-
-    try {
-      await fetch(
-        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
-        {
-          method: "PATCH",
-          credentials: "include",
-        },
-      );
-    } catch {
-      // could add a toast here
-    }
-  }
-
-  async function markAllRead() {
-    const unread = notifications.filter((n) => !n.read);
-    if (unread.length === 0) return;
-
-    notifications = notifications.map((n) => ({ ...n, read: true })); // optimistic
-
-    await Promise.all(
-      unread.map((n) =>
-        fetch(`https://backend.umc.jasonsika.com/api/notifications/${n.id}`, {
-          method: "PATCH",
-          credentials: "include",
-        }),
-      ),
-    );
-  }
-
-  $effect(() => {
-    if (
-      activeTopTab === "Notification" &&
-      !hasLoadedNotifications &&
-      !loadingNotifications
-    ) {
-      loadNotifications();
-    }
-  });
 
   // separate effect: mark read shortly after viewing, so the badge doesn't vanish instantly
   $effect(() => {
@@ -243,23 +155,6 @@
     }
   }
 
-  async function loadNotifications() {
-    loadingNotifications = true;
-    try {
-      const res = await fetch(
-        "https://backend.umc.jasonsika.com/api/notifications",
-        { credentials: "include" },
-      );
-      const data = await res.json();
-      notifications = data?.notifications ?? [];
-    } catch {
-      notifications = [];
-    } finally {
-      loadingNotifications = false;
-      hasLoadedNotifications = true;
-    }
-  }
-
   $effect(() => {
     if (
       activeTopTab === "Notification" &&
@@ -269,6 +164,20 @@
       loadNotifications();
     }
   });
+
+  async function handleNotificationClick(notification) {
+    if (isActionable(notification)) {
+      markNotificationRead(notification);
+      return;
+    }
+    notificationsStore.remove(notification.id);
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        { method: "DELETE", credentials: "include" },
+      );
+    } catch {}
+  }
 
   async function respondToRequest(notification, accept) {
     const friendshipId = notification.data?.friendshipId;
@@ -287,13 +196,11 @@
         },
       );
       if (res.ok) {
-        notifications = notifications.filter((n) => n.id !== notification.id);
+        notificationsStore.remove(notification.id);
         if (accept) {
           const friendsRes = await fetch(
             "https://backend.umc.jasonsika.com/api/friends",
-            {
-              credentials: "include",
-            },
+            { credentials: "include" },
           );
           const data = await friendsRes.json();
           const newFriends = data?.friends ?? [];
@@ -303,6 +210,89 @@
       }
     } catch {
       // could add a toast here
+    }
+  }
+
+  async function markPingRead(notification) {
+    const pingId = notification.data?.pingId;
+    if (!pingId) return;
+    notificationsStore.remove(notification.id);
+    try {
+      await fetch(`https://backend.umc.jasonsika.com/api/ping/${pingId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {}
+  }
+
+  function handlePongSent(notification) {
+    notificationsStore.remove(notification.id);
+  }
+
+  async function dismissNotification(e, notification) {
+    e.stopPropagation();
+    notificationsStore.remove(notification.id);
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        { method: "DELETE", credentials: "include" },
+      );
+    } catch {}
+  }
+
+  async function clearAllNotifications() {
+    if (notifications.length === 0) return;
+    const previous = notifications;
+    notificationsStore.clear();
+    try {
+      await fetch("https://backend.umc.jasonsika.com/api/notifications", {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      notificationsStore.setAll(previous);
+    }
+  }
+
+  async function markNotificationRead(notification) {
+    if (notification.read) return;
+    notificationsStore.markRead(notification.id);
+    try {
+      await fetch(
+        `https://backend.umc.jasonsika.com/api/notifications/${notification.id}`,
+        { method: "PATCH", credentials: "include" },
+      );
+    } catch {}
+  }
+
+  async function markAllRead() {
+    const unread = notifications.filter((n) => !n.read);
+    if (unread.length === 0) return;
+    unread.forEach((n) => notificationsStore.markRead(n.id));
+    await Promise.all(
+      unread.map((n) =>
+        fetch(`https://backend.umc.jasonsika.com/api/notifications/${n.id}`, {
+          method: "PATCH",
+          credentials: "include",
+        }),
+      ),
+    );
+  }
+
+  async function loadNotifications() {
+    loadingNotifications = true;
+    try {
+      const res = await fetch(
+        "https://backend.umc.jasonsika.com/api/notifications",
+        { credentials: "include" },
+      );
+      const data = await res.json();
+      notificationsStore.setAll(data?.notifications ?? []);
+    } catch {
+      notificationsStore.setAll([]);
+    } finally {
+      loadingNotifications = false;
+      hasLoadedNotifications = true;
     }
   }
 
@@ -352,6 +342,23 @@
     currentDisplayname={user?.displayname ?? ""}
     currentUsername={user ? `@${user.username}` : "@"}
     {user}
+  />
+{/if}
+
+{#if pongTarget}
+  <PongModal
+    onClose={() => (pongTarget = null)}
+    onSent={() => handlePongSent(pongTarget)}
+    pingId={pongTarget.data?.pingId}
+    senderUsername={pongTarget.actorUsername}
+  />
+{/if}
+
+{#if pingAgainTarget}
+  <PingModal
+    onClose={() => (pingAgainTarget = null)}
+    targetUsername={pingAgainTarget.actorUsername}
+    targetDisplayname={pingAgainTarget.actorUsername}
   />
 {/if}
 
@@ -420,6 +427,7 @@
       <button
         class="tab"
         class:active={activeTopTab === "Notification"}
+        class:unreadTab={unreadCount > 0}
         onclick={(e) => {
           activeTopTab = "Notification";
           scrollTabToStart(e);
@@ -528,11 +536,6 @@
       </div>
     {:else if activeTopTab === "Notification"}
       <div class="feed">
-        {#if notifications.length > 0}
-          <button class="clear-all" onclick={clearAllNotifications}>
-            Clear all
-          </button>
-        {/if}
         <div class="list rim">
           {#if loadingNotifications}
             <p class="empty-state">Loading...</p>
@@ -552,31 +555,33 @@
                 >
                   ×
                 </button>
-                <div class="stackH">
-                  <div class="notification_image">
-                    <img
-                      class="profilePicture"
-                      src={notificationIcons[notification.type] ||
-                        "/images/plhd.png"}
-                      alt=""
-                    />
-                  </div>
-                  {#if notification.actorPfp || notification.actorUsername}
-                    <div class="altuser_image rim">
+                <div class="notifBody">
+                  <div class="stackH">
+                    <div class="notification_image">
                       <img
-                        class="profilePicture rim"
-                        src={notification.actorPfp || "/images/plhd.png"}
+                        class="profilePicture"
+                        src={notificationIcons[notification.type] ||
+                          "/images/plhd.png"}
                         alt=""
                       />
                     </div>
-                  {/if}
-                  <div class="text notiftext">
-                    <h1 class="Title">{notification.title}</h1>
-                    <p class="subtitle">{notification.subtitle}</p>
+                    {#if notification.actorPfp || notification.actorUsername}
+                      <div class="altuser_image rim">
+                        <img
+                          class="profilePicture rim"
+                          src={notification.actorPfp || "/images/plhd.png"}
+                          alt=""
+                        />
+                      </div>
+                    {/if}
+                    <div class="text notiftext">
+                      <h1 class="Title">{notification.title}</h1>
+                      <p class="subtitle">{notification.subtitle}</p>
+                    </div>
+                    {#if !notification.read}
+                      <span class="unread-dot"></span>
+                    {/if}
                   </div>
-                  {#if !notification.read}
-                    <span class="unread-dot"></span>
-                  {/if}
                 </div>
                 {#if notification.type === "friend_request" && notification.data?.friendshipId}
                   <div class="notifActions">
@@ -597,11 +602,40 @@
                       Decline
                     </button>
                   </div>
+                {:else if notification.type === "ping"}
+                  <div
+                    class="notifActions"
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <button onclick={() => (pongTarget = notification)}
+                      >Pong</button
+                    >
+                  </div>
+                {:else if notification.type === "pong"}
+                  <div
+                    class="notifActions"
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <button onclick={() => (pingAgainTarget = notification)}
+                      >Ping again</button
+                    >
+                    <button onclick={() => markPingRead(notification)}
+                      >Mark as read</button
+                    >
+                  </div>
                 {/if}
               </div>
             {/each}
           {/if}
         </div>
+
+        {#if notifications.length > 0}
+          <div class="clear-all-fade">
+            <button class="clear-all" onclick={clearAllNotifications}>
+              Clear all
+            </button>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -847,6 +881,11 @@
     text-overflow: clip !important;
   }
 
+  .text,
+  .notiftext {
+    height: auto;
+  }
+
   /* ============================================================
      TABS (top-level: Library/Friends/Notification/Search,
             bottom-level: Playlists/Albums/Songs/Artists)
@@ -1028,6 +1067,7 @@
      FEED TAB (notifications)
      ============================================================ */
   .feed {
+    position: relative; /* anchor for the fade footer */
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -1043,21 +1083,40 @@
     width: 100%;
     height: 100%;
     gap: 4px;
-    padding: 1px 0px 10px 0px;
+    padding: 1px 0px 60px 0px; /* bottom padding matches fade height so last card isn't hidden behind it */
     overflow-y: auto;
   }
 
+  .clear-all-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 60px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 0 10px 10px 10px;
+    box-sizing: border-box;
+    -webkit-mask-image: linear-gradient(to top, black 10%, transparent);
+    mask-image: linear-gradient(to top, black 10%, transparent);
+    -webkit-backdrop-filter: blur(50px);
+    backdrop-filter: blur(50px);
+    pointer-events: none; /* let scroll/clicks pass through the empty area */
+    z-index: 5;
+  }
+
   .clear-all {
-    align-self: flex-end;
+    pointer-events: all; /* ...except the button itself */
     font-size: 12px;
-    opacity: 0.5;
+    opacity: 0.7;
     padding: 4px 8px;
     cursor: pointer;
     transition: opacity 0.15s ease;
   }
 
   .clear-all:hover {
-    opacity: 0.9;
+    opacity: 1;
   }
 
   .notification {
@@ -1065,11 +1124,16 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+    height: fit-content !important;
     background: linear-gradient(to bottom, #ffffff, #eeeeee);
     cursor: pointer;
     transition: background 0.15s ease;
-    overflow: hidden;
     z-index: 1;
+  }
+
+  .notifBody {
+    overflow: hidden;
+    border-radius: inherit;
   }
 
   .notification:hover {
@@ -1107,6 +1171,7 @@
   }
 
   .stackH {
+    position: relative;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -1116,6 +1181,11 @@
 
   .notification_image,
   .altuser_image {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: relative;
+    height: fit-content;
     flex-shrink: 0;
   }
 
@@ -1149,18 +1219,26 @@
   .notifActions {
     display: flex;
     flex-direction: row;
+    align-items: center;
     gap: 8px;
-    padding: 0 15px 12px 15px;
+    padding: 10px 15px 10px 15px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .notifActions button {
+    flex: 1 1 0;
+    min-width: 0;
     font-size: 13px;
     font-weight: 500;
-    padding: 6px 14px;
-    border-radius: 6px;
+    padding: 6px 10px;
     border: none;
     cursor: pointer;
     transition: opacity 0.15s ease;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: center;
   }
 
   .notifActions button:first-child {
@@ -1175,6 +1253,10 @@
 
   .notifActions button:hover {
     opacity: 0.85;
+  }
+
+  .unreadTab {
+    color: #e33 !important;
   }
 
   /* ============================================================

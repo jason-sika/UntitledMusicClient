@@ -3,6 +3,9 @@
   import Player from "$lib/components/Player.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import { presence } from "$lib/stores/presence";
+  import PingModal from "$lib/components/PingModal.svelte";
+
+  let showPingModal = $state(false);
 
   let { data } = $props();
 
@@ -14,6 +17,34 @@
   let friendshipId = $state(null);
   let working = $state(false);
   let loadingRelationship = $state(true);
+  let pingMessage = $state("");
+  let sendingPing = $state(false);
+  let pingSent = $state(false);
+
+  async function sendPing() {
+    if (sendingPing) return;
+    sendingPing = true;
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/ping", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: data.user.username,
+          message: pingMessage.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        pingMessage = "";
+        pingSent = true;
+        setTimeout(() => (pingSent = false), 2000);
+      }
+    } finally {
+      sendingPing = false;
+    }
+  }
+
+  const MAX_PING_LENGTH = 240;
 
   const isOwnProfile = $derived(currentUser?.username === data.user?.username);
   const statusIcons = {
@@ -186,6 +217,14 @@
   }
 </script>
 
+{#if showPingModal}
+  <PingModal
+    onClose={() => (showPingModal = false)}
+    targetUsername={data.user.username}
+    targetDisplayname={data.user.displayname}
+  />
+{/if}
+
 <div class="website">
   <div class="appview">
     <Sidebar />
@@ -230,6 +269,12 @@
           {#if !loadingRelationship && !isOwnProfile}
             <div class="actions">
               {#if requestState === "friends"}
+                <button
+                  class="friendbtn rim"
+                  onclick={() => (showPingModal = true)}
+                >
+                  Ping
+                </button>
                 <button class="friendbtn rim" onclick={openRemoveFriendPopup}>
                   Remove Friend
                 </button>
@@ -338,7 +383,7 @@
     font-size: 12px;
     font-weight: 500;
     padding: 4px 10px;
-    border-radius: 999px;
+
     background: #00000010;
     color: #000000;
     white-space: nowrap;
@@ -371,5 +416,20 @@
     width: 35px;
     height: 35px;
     z-index: 20;
+  }
+
+  .ping-row {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .ping-row input {
+    all: unset;
+    background: #00000008;
+    padding: 6px 10px;
+
+    font-size: 13px;
+    min-width: 160px;
   }
 </style>
