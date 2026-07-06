@@ -1,18 +1,24 @@
-<!-- src/routes/app/+layout.svelte -->
 <script>
-  import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
   import "../app.css";
   let { children } = $props();
+
+  const EXEMPT_PREFIXES = ["/auth", "/friends"];
+
+  let showFlowbox = $derived(
+    !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
+  );
 </script>
 
 {@render children()}
-<div class="flowbox">
-  <p>
-    this was not meant for mobile. please use a desktop. If you're a desktop
-    user, please make your browser window larger.
-  </p>
-</div>
+{#if showFlowbox}
+  <div class="flowbox">
+    <p>
+      this was not meant for mobile. please use a desktop. If you're a desktop
+      user, please make your browser window larger.
+    </p>
+  </div>
+{/if}
 
 <style>
   .flowbox {
