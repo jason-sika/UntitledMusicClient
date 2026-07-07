@@ -336,377 +336,58 @@
   });
 </script>
 
-{#if showSettings}
-  <Settings
-    onClose={() => (showSettings = false)}
-    currentDisplayname={user?.displayname ?? ""}
-    currentUsername={user ? `@${user.username}` : "@"}
-    {user}
-  />
-{/if}
-
-{#if pongTarget}
-  <PongModal
-    onClose={() => (pongTarget = null)}
-    onSent={() => handlePongSent(pongTarget)}
-    pingId={pongTarget.data?.pingId}
-    senderUsername={pongTarget.actorUsername}
-  />
-{/if}
-
-{#if pingAgainTarget}
-  <PingModal
-    onClose={() => (pingAgainTarget = null)}
-    targetUsername={pingAgainTarget.actorUsername}
-    targetDisplayname={pingAgainTarget.actorUsername}
-  />
-{/if}
-
-<div class="sidebar">
-  <div class="you rim">
-    <div class="accountprev">
-      <div class="profilePicture rim">
-        <img
-          class="profilePicture"
-          src={user?.pfpUrl || "/images/plhd.png"}
-          alt="Profile picture"
-          onclick={() => userprofile(user?.username)}
-          style="cursor: pointer;"
-        />
-      </div>
-      <div
-        class="text"
-        onclick={() => userprofile(user?.username)}
-        style="cursor: pointer;"
-      >
-        <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
-        <p class="subtitle">
-          {user ? `@${user.username}` : ""}
-        </p>
-      </div>
-      <button class="settings" onclick={() => (showSettings = true)}>
-        <img class="status-icon2" src="/images/settings.png" alt="" /></button
-      >
-      <div class="select rim">
-        <img
-          class="status-icon2"
-          src={statusIcons[user?.status ?? "online"]}
-          alt=""
-        />
-        <select
-          onchange={(e) => presence.setStatus(e.target.value)}
-          value={user?.status ?? "online"}
-        >
-          <option value="online">Online</option>
-          <option value="away">Away</option>
-          <option value="dnd">Do Not Disturb</option>
-        </select>
-      </div>
-    </div>
+<div class="searchtab">
+  <div class="formInput searchinput">
+    <input
+      type="text"
+      placeholder="@username..."
+      bind:value={query}
+      oninput={handleFindInput}
+    />
   </div>
 
-  <div class="tabview online rim">
-    <div
-      class="tabswitch"
-      onwheel={(e) => {
-        if (e.deltaY !== 0) {
-          e.preventDefault();
-          e.currentTarget.scrollLeft += e.deltaY;
-        }
-      }}
-    >
-      <button
-        class="tab"
-        class:active={activeTopTab === "Friends"}
-        onclick={(e) => {
-          activeTopTab = "Friends";
-          scrollTabToStart(e);
-        }}>Friends</button
-      >
-
-      <button
-        class="tab"
-        class:active={activeTopTab === "Notification"}
-        class:unreadTab={unreadCount > 0}
-        onclick={(e) => {
-          activeTopTab = "Notification";
-          scrollTabToStart(e);
-        }}
-      >
-        Notification{#if unreadCount > 0}<span class="unread-dot"></span>{/if}
-      </button>
-
-      <button
-        class="tab"
-        class:active={activeTopTab === "Find"}
-        onclick={(e) => {
-          activeTopTab = "Find";
-          scrollTabToStart(e);
-        }}>Find</button
-      >
-    </div>
-
-    {#if activeTopTab === "Friends"}
-      <div class="friends">
-        {#if loadingFriends}
-          <p class="empty-state">Loading friends...</p>
-        {:else if friends.length === 0}
-          <p class="empty-state">No friends yet.</p>
-        {:else}
-          {#each friends as friend}
-            <div
-              class="friend you"
-              onclick={() => userprofile(friend.username)}
-            >
-              <div class="profilePicture rim" style="position: relative;">
-                <img
-                  class="profilePicture rim"
-                  src={friend.pfpUrl || "/images/plhd.png"}
-                  alt="Profile picture"
-                />
-                <img
-                  class="status-icon"
-                  src={statusIcons[presenceStatus(friend)]}
-                  alt=""
-                />
-              </div>
-              <div class="text notiftext">
-                <h1 class="Name">{friend.displayname}</h1>
-                <p class="subtitle subtitle">@{friend.username}</p>
-              </div>
+  <div class="searchresults">
+    {#if !query.startsWith("@")}
+      <p class="empty-state"></p>
+    {:else if query.slice(1).trim().length < 1}
+      <p class="empty-state">Type a name after @</p>
+    {:else if searching}
+      <p class="empty-state">Finding...</p>
+    {:else if searchResults.length === 0}
+      <p class="empty-state">No users found.</p>
+    {:else}
+      {#each searchResults as result}
+        <div class="stackV" onclick={() => selectFindResult(result.username)}>
+          {#if result.bannerUrl}
+            <img
+              class="profileBanner"
+              src={result.bannerUrl}
+              alt="Profile Banner"
+            />
+          {/if}
+          <div class="someone you">
+            <div class="profilePicture rim" style="position: relative;">
+              <img
+                class="profilePicture rim"
+                src={result.pfpUrl || "/images/plhd.png"}
+                alt="Profile picture"
+              />
+              <img
+                class="status-icon"
+                src={statusIcons[presenceStatus(result)]}
+                alt=""
+              />
             </div>
-          {/each}
-        {/if}
-        <div class="clear-all-fade"></div>
-      </div>
-    {:else if activeTopTab === "Find"}
-      <div class="searchtab">
-        <div class="formInput searchinput">
-          <input
-            type="text"
-            placeholder="@username..."
-            bind:value={query}
-            oninput={handleFindInput}
-          />
-        </div>
-
-        <div class="searchresults">
-          {#if !query.startsWith("@")}
-            <p class="empty-state"></p>
-          {:else if query.slice(1).trim().length < 1}
-            <p class="empty-state">Type a name after @</p>
-          {:else if searching}
-            <p class="empty-state">Finding...</p>
-          {:else if searchResults.length === 0}
-            <p class="empty-state">No users found.</p>
-          {:else}
-            {#each searchResults as result}
-              <div
-                class="stackV"
-                onclick={() => selectFindResult(result.username)}
-              >
-                {#if result.bannerUrl}
-                  <img
-                    class="profileBanner"
-                    src={result.bannerUrl}
-                    alt="Profile Banner"
-                  />
-                {/if}
-                <div class="someone you">
-                  <div class="profilePicture rim" style="position: relative;">
-                    <img
-                      class="profilePicture rim"
-                      src={result.pfpUrl || "/images/plhd.png"}
-                      alt="Profile picture"
-                    />
-                    <img
-                      class="status-icon"
-                      src={statusIcons[presenceStatus(result)]}
-                      alt=""
-                    />
-                  </div>
-                  <div class="text notiftext">
-                    <h1 class="Name">{result.displayname}</h1>
-                    <p class="subtitle subtitle">@{result.username}</p>
-                  </div>
-                </div>
-              </div>
-            {/each}
-          {/if}
-        </div>
-        <div class="clear-all-fade"></div>
-      </div>
-    {:else if activeTopTab === "Notification"}
-      <div class="feed">
-        <div class="list">
-          {#if loadingNotifications}
-            <p class="empty-state">Loading...</p>
-          {:else if notifications.length === 0}
-            <p class="empty-state">No notifications yet.</p>
-          {:else}
-            {#each notifications as notification}
-              <div
-                class="notification rim"
-                class:unread={!notification.read}
-                onclick={() => handleNotificationClick(notification)}
-              >
-                <button
-                  class="dismiss-btn"
-                  onclick={(e) => dismissNotification(e, notification)}
-                  aria-label="Dismiss"
-                >
-                  ×
-                </button>
-                <div class="notifBody">
-                  <div class="stackH">
-                    <div class="notification_image">
-                      <img
-                        class="profilePicture"
-                        src={notificationIcons[notification.type] ||
-                          "/images/plhd.png"}
-                        alt=""
-                      />
-                    </div>
-                    {#if notification.actorPfp || notification.actorUsername}
-                      <div class="altuser_image rim">
-                        <img
-                          class="profilePicture rim"
-                          src={notification.actorPfp || "/images/plhd.png"}
-                          alt=""
-                        />
-                      </div>
-                    {/if}
-                    <div class="text notiftext">
-                      <h1 class="Title">{notification.title}</h1>
-                      <p class="subtitle">{notification.subtitle}</p>
-                    </div>
-                    {#if !notification.read}
-                      <span class="unread-dot"></span>
-                    {/if}
-                  </div>
-                </div>
-                {#if notification.type === "friend_request" && notification.data?.friendshipId}
-                  <div class="notifActions">
-                    <button
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        respondToRequest(notification, true);
-                      }}
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        respondToRequest(notification, false);
-                      }}
-                    >
-                      Decline
-                    </button>
-                  </div>
-                {:else if notification.type === "ping"}
-                  <div
-                    class="notifActions"
-                    onclick={(e) => e.stopPropagation()}
-                  >
-                    <button onclick={() => (pongTarget = notification)}
-                      >Pong</button
-                    >
-                  </div>
-                {:else if notification.type === "pong"}
-                  <div
-                    class="notifActions"
-                    onclick={(e) => e.stopPropagation()}
-                  >
-                    <button onclick={() => (pingAgainTarget = notification)}
-                      >Ping again</button
-                    >
-                    <button onclick={() => markPingRead(notification)}
-                      >Mark as read</button
-                    >
-                  </div>
-                {/if}
-              </div>
-            {/each}
-          {/if}
-        </div>
-
-        {#if notifications.length > 0}
-          <div class="clear-all-fade">
-            <button class="clear-all" onclick={clearAllNotifications}>
-              Clear all
-            </button>
+            <div class="text notiftext">
+              <h1 class="Name">{result.displayname}</h1>
+              <p class="subtitle subtitle">@{result.username}</p>
+            </div>
           </div>
-        {/if}
-      </div>
+        </div>
+      {/each}
     {/if}
   </div>
-
-  <div class="tabview library rim">
-    <div
-      class="tabswitch"
-      onwheel={(e) => {
-        if (e.deltaY !== 0) {
-          e.preventDefault();
-          e.currentTarget.scrollLeft += e.deltaY;
-        }
-      }}
-    >
-      <button
-        class="tab"
-        class:active={activeLibraryTab === "Playlists"}
-        onclick={(e) => {
-          activeLibraryTab = "Playlists";
-          scrollTabToStart(e);
-        }}>Playlists</button
-      >
-
-      <button
-        class="tab"
-        class:active={activeLibraryTab === "Albums"}
-        onclick={(e) => {
-          activeLibraryTab = "Albums";
-          scrollTabToStart(e);
-        }}>Albums</button
-      >
-
-      <button
-        class="tab"
-        class:active={activeLibraryTab === "Songs"}
-        onclick={(e) => {
-          activeLibraryTab = "Songs";
-          scrollTabToStart(e);
-        }}>Songs</button
-      >
-
-      <button
-        class="tab"
-        class:active={activeLibraryTab === "Artists"}
-        onclick={(e) => {
-          activeLibraryTab = "Artists";
-          scrollTabToStart(e);
-        }}>Artists</button
-      >
-    </div>
-
-    {#if activeLibraryTab === "Playlists"}
-      <div class="playlist">
-        <p class="empty-state">No playlists yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Albums"}
-      <div class="playlist">
-        <p class="empty-state">No albums yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Songs"}
-      <div class="playlist">
-        <p class="empty-state">No songs yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Artists"}
-      <div class="playlist">
-        <p class="empty-state">No artists yet.</p>
-      </div>
-    {/if}
-  </div>
+  <div class="clear-all-fade"></div>
 </div>
 
 <style>
@@ -1016,14 +697,18 @@
      SEARCH TAB
      ============================================================ */
   .searchtab {
+    position: fixed;
+    top: 73px;
+    left: 265px;
     display: flex;
     flex-direction: column;
-    width: 100%;
-    height: 100%;
+    width: 265px;
+    height: 300px;
     gap: 0px;
     padding: 1px 0px 0px 0px;
     overflow-y: auto;
     background: white;
+    z-index: 100;
   }
 
   .searchinput {
@@ -1044,6 +729,7 @@
     gap: 0px;
     overflow-y: auto;
     flex: 1;
+    width: 265px;
   }
 
   /* result card: optional banner image stacked above the profile row */
@@ -1059,7 +745,7 @@
   .profileBanner {
     margin-inline: 20px;
     margin-block: -20px;
-    height: 40px !important;
+    height: 70px !important;
     object-fit: cover;
   }
 

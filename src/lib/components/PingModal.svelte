@@ -84,7 +84,9 @@
 
 <style>
   .flowbox {
-    position: fixed;
+    position: absolute;
+    top: 0;
+    left: 0;
     inset: 0;
     display: flex;
     flex-direction: row;

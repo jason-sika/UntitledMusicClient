@@ -11,7 +11,6 @@
   let error = $state("");
   let success = $state("");
   let loading = $state(false);
-  let youtubeConnected = $state(false);
   let currentPage = $state("AccountSettings");
   let pfpInput = $state(null);
   let bannerInput = $state(null);
@@ -19,36 +18,108 @@
   let uploadingBanner = $state(false);
   let pfpUrl = $state(user?.pfpUrl);
   let bannerUrl = $state(user?.bannerUrl);
+  let pfpStatus = $state("");
+  let bannerStatus = $state("");
 
-  async function handleUpload(file, endpoint, onSuccess, setUploading) {
+  async function preResizeIfStatic(file) {
+    const isAnimated = file.type === "image/gif" || file.type === "image/webp";
+    if (isAnimated) return file;
+
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    const maxDim = 1600;
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    canvas.width = bitmap.width * scale;
+    canvas.height = bitmap.height * scale;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/webp", 0.85),
+    );
+
+    return new File([blob], file.name, { type: "image/webp" });
+  }
+
+  async function handleUpload(
+    file,
+    endpoint,
+    onSuccess,
+    setUploading,
+    setStatus,
+  ) {
     if (!file) return;
     error = "";
     setUploading(true);
 
-    const formData = new FormData();
-    formData.append("file", file);
+    const isAnimated = file.type === "image/gif" || file.type === "image/webp";
+    setStatus("Uploading...");
 
     try {
+      const prepared = await preResizeIfStatic(file);
+      const formData = new FormData();
+      formData.append("file", prepared);
+
       const res = await fetch(
         `https://backend.umc.jasonsika.com/api/upload/${endpoint}`,
-        {
-          method: "POST",
-          credentials: "include",
-          body: formData,
-        },
+        { method: "POST", credentials: "include", body: formData },
       );
       const data = await res.json();
 
       if (!res.ok) {
         error = data?.error || "Upload failed.";
-      } else {
-        onSuccess(data.url);
+        setUploading(false);
+        setStatus("");
+        return;
       }
+
+      setStatus(isAnimated ? "Processing animation..." : "Processing...");
+      await pollJobStatus(data.jobId, onSuccess, setUploading, setStatus);
     } catch {
       error = "Network error.";
-    } finally {
       setUploading(false);
+      setStatus("");
     }
+  }
+
+  async function pollJobStatus(jobId, onSuccess, setUploading, setStatus) {
+    const maxAttempts = 60; // ~2 minutes at 2s intervals
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+
+      try {
+        const res = await fetch(
+          `https://backend.umc.jasonsika.com/api/upload/status/${jobId}`,
+          { credentials: "include" },
+        );
+        const job = await res.json();
+
+        if (job.status === "done") {
+          onSuccess(job.url);
+          setUploading(false);
+          setStatus("");
+          return;
+        }
+        if (job.status === "error") {
+          error = job.error || "Processing failed.";
+          setUploading(false);
+          setStatus("");
+          return;
+        }
+        // still "processing" — nudge the message a little past ~20s so a long
+        // wait doesn't look stuck, without needing real progress from the server
+        if (i === 10) {
+          setStatus("Still working on it...");
+        }
+      } catch {
+        // transient network hiccup, keep trying
+      }
+    }
+
+    error = "Processing is taking longer than expected.";
+    setUploading(false);
+    setStatus("");
   }
 
   function handlePfpChange(e) {
@@ -57,6 +128,7 @@
       "pfp",
       (url) => (pfpUrl = url),
       (val) => (uploadingPfp = val),
+      (msg) => (pfpStatus = msg),
     );
   }
 
@@ -66,6 +138,7 @@
       "banner",
       (url) => (bannerUrl = url),
       (val) => (uploadingBanner = val),
+      (msg) => (bannerStatus = msg),
     );
   }
 
@@ -125,38 +198,6 @@
       error = "Network error — could not reach the server.";
     } finally {
       loading = false;
-    }
-  }
-
-  function connectYoutube() {
-    const width = 500;
-    const height = 650;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-      "/auth",
-      "youtube-auth",
-      `width=${width},height=${height},left=${left},top=${top}`,
-    );
-
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(timer);
-        checkYoutubeStatus();
-      }
-    }, 500);
-  }
-
-  async function checkYoutubeStatus() {
-    try {
-      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
-        credentials: "include",
-      });
-      const data = await res.json();
-      youtubeConnected = !!data?.user?.youtubeConnected;
-    } catch {
-      // ignore
     }
   }
 
@@ -223,7 +264,7 @@
     onclick={() => bannerInput.click()}
     style="background-image: {bannerUrl ? `url(${bannerUrl})` : 'none'}"
   >
-    {#if uploadingBanner}<p class="uploading-label">Uploading...</p>{/if}
+    {#if uploadingBanner}<p class="uploading-label">{bannerStatus}</p>{/if}
   </button>
 
   <input
@@ -239,7 +280,7 @@
       src={pfpUrl || "/images/plhd.png"}
       alt="Profile picture"
     />
-    {#if uploadingPfp}<p class="uploading-label">Uploading...</p>{/if}
+    {#if uploadingPfp}<p class="uploading-label">{pfpStatus}</p>{/if}
   </button>
 
   {#if error}<p class="response error">{error}</p>{/if}
@@ -249,18 +290,6 @@
   <button class="delete-account rim" onclick={openDeleteAccountPopup}
     >Delete Account -></button
   >
-  <p class="wip" style="font-size: 10px; width: 100%; text-align: left;">
-    Player Connection
-  </p>
-  <button
-    class="connect rim youtube"
-    onclick={connectYoutube}
-    disabled={youtubeConnected}
-  >
-    <p>{youtubeConnected ? "YouTube Connected ✓" : "Connect YouTube"}</p>
-  </button>
-  <button class="connect rim wip spotify"> Connect Spotify </button>
-  <button class="connect rim wip appleMusic"> Connect Apple Music </button>
 </div>
 
 <style>

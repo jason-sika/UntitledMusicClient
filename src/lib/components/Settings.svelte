@@ -166,7 +166,9 @@
 
 <style>
   .flowbox {
-    position: fixed;
+    position: absolute;
+    top: 0;
+    left: 0;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -203,7 +205,7 @@
   .left {
     height: 100%;
     align-items: center;
-    justify-content: start;
+    justify-content: start !important;
     animation: none !important;
   }
 

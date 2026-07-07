@@ -1,7 +1,5 @@
 <script>
   import { onMount, onDestroy } from "svelte";
-  import Player from "$lib/components/Player.svelte";
-  import Sidebar from "$lib/components/Sidebar.svelte";
   import { presence } from "$lib/stores/presence";
   import PingModal from "$lib/components/PingModal.svelte";
 
@@ -225,102 +223,82 @@
   />
 {/if}
 
-<div class="website">
-  <div class="appview">
-    <Sidebar />
-    {#if data.notFound}
-      <div class="notfound">
-        <p>This user doesn't exist.</p>
+{#if data.notFound}
+  <div class="notfound">
+    <p>This user doesn't exist.</p>
+  </div>
+{:else}
+  <div class="profilepage">
+    <div
+      class="banner"
+      style="background-image: {data.user.bannerUrl
+        ? `url(${data.user.bannerUrl})`
+        : 'none'}; object-fit: cover;"
+    ></div>
+    <div class="profileheader">
+      <div class="pfpwrap">
+        <img
+          class="pfp rim"
+          src={data.user.pfpUrl || "/images/plhd.png"}
+          alt="Profile picture"
+        />
+        <img class="status-icon" src={statusIcons[status]} alt="" />
       </div>
-    {:else}
-      <div class="profilepage">
-        <div
-          class="banner"
-          style="background-image: {data.user.bannerUrl
-            ? `url(${data.user.bannerUrl})`
-            : 'none'}; object-fit: cover;"
-        ></div>
-        <div class="profileheader">
-          <div class="pfpwrap">
-            <img
-              class="pfp rim"
-              src={data.user.pfpUrl || "/images/plhd.png"}
-              alt="Profile picture"
-            />
-            <img class="status-icon" src={statusIcons[status]} alt="" />
-          </div>
-          <div class="info">
-            <h1>{data.user.displayname}</h1>
-            <p class="username">@{data.user.username}</p>
-          </div>
-          <div class="tags">
-            {#each data.user.tags ?? [] as tag}
-              <span
-                class="tag"
-                style={tag.color
-                  ? `background: ${tag.color}20; color: ${tag.color};`
-                  : ""}
-              >
-                {tag.label}
-              </span>
-            {/each}
-          </div>
+      <div class="info">
+        <h1>{data.user.displayname}</h1>
+        <p class="username">@{data.user.username}</p>
+      </div>
+      <div class="tags">
+        {#each data.user.tags ?? [] as tag}
+          <span
+            class="tag"
+            style={tag.color
+              ? `background: ${tag.color}20; color: ${tag.color};`
+              : ""}
+          >
+            {tag.label}
+          </span>
+        {/each}
+      </div>
 
-          {#if !loadingRelationship && !isOwnProfile}
-            <div class="actions">
-              {#if requestState === "friends"}
-                <button
-                  class="friendbtn rim"
-                  onclick={() => (showPingModal = true)}
-                >
-                  Ping
-                </button>
-                <button class="friendbtn rim" onclick={openRemoveFriendPopup}>
-                  Remove Friend
-                </button>
-              {:else if requestState === "pending"}
-                <button class="friendbtn rim" disabled>Request Sent</button>
-              {:else if requestState === "incoming"}
-                <button
-                  class="friendbtn rim"
-                  onclick={acceptRequest}
-                  disabled={working}
-                >
-                  {working ? "Accepting..." : "Accept Request"}
-                </button>
-              {:else}
-                <button
-                  class="friendbtn rim"
-                  onclick={sendFriendRequest}
-                  disabled={working}
-                >
-                  {working ? "Sending..." : "Add Friend"}
-                </button>
-              {/if}
-            </div>
+      {#if !loadingRelationship && !isOwnProfile}
+        <div class="actions">
+          {#if requestState === "friends"}
+            <button
+              class="friendbtn rim"
+              onclick={() => (showPingModal = true)}
+            >
+              Ping
+            </button>
+            <button class="friendbtn rim" onclick={openRemoveFriendPopup}>
+              Remove Friend
+            </button>
+          {:else if requestState === "pending"}
+            <button class="friendbtn rim" disabled>Request Sent</button>
+          {:else if requestState === "incoming"}
+            <button
+              class="friendbtn rim"
+              onclick={acceptRequest}
+              disabled={working}
+            >
+              {working ? "Accepting..." : "Accept Request"}
+            </button>
+          {:else}
+            <button
+              class="friendbtn rim"
+              onclick={sendFriendRequest}
+              disabled={working}
+            >
+              {working ? "Sending..." : "Add Friend"}
+            </button>
           {/if}
         </div>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
-  <Player />
-</div>
+{/if}
 
 <style>
-  .website {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh !important;
-    width: 100dvw !important;
-  }
-
-  .appview {
-    display: flex;
-    flex-direction: row;
-    height: 100%;
-    width: 100% !important;
-  }
-
   .profilepage {
     display: flex;
     flex-direction: column;

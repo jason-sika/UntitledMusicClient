@@ -42,10 +42,7 @@
       </div>
     </div>
     <div class="bottom">
-      <p class="desc">
-        Listen to music through the most popular providers there is. Without
-        changing interfaces, with the same features.
-      </p>
+      <p class="desc">-Project moving to something else, stay tuned</p>
       <div class="buttonwrapper">
         <button onclick={() => goto("/app")}>{button}</button>
         <button
@@ -60,7 +57,7 @@
   </div>
   <div class="side2">
     <h1>Enjoy music once again.</h1>
-    <img src="/images/image.png" alt="umcUI" />
+    <img src="/images/plhd.png" alt="umcUI" />
   </div>
 </div>
 
