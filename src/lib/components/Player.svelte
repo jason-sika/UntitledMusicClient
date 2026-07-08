@@ -126,6 +126,7 @@
     width: 100%;
     background: linear-gradient(to bottom, #ffffff70, #cecece70);
     color: #000000;
+    z-index: 10;
   }
 
   .meta {

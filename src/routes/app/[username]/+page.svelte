@@ -315,7 +315,6 @@
     background: linear-gradient(to bottom, #ffffff70, #cecece70);
     background-size: cover;
     background-position: center;
-    border: 8px inset white;
     background-color: #efefef;
   }
 
@@ -396,20 +395,5 @@
     width: 35px;
     height: 35px;
     z-index: 20;
-  }
-
-  .ping-row {
-    display: flex;
-    flex-direction: row;
-    gap: 6px;
-  }
-
-  .ping-row input {
-    all: unset;
-    background: #00000008;
-    padding: 6px 10px;
-
-    font-size: 13px;
-    min-width: 160px;
   }
 </style>

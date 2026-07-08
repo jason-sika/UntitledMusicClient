@@ -7,21 +7,13 @@
   let { children } = $props();
 
   const EXEMPT_PREFIXES = ["/auth", "/friends"];
-  const EXEMPT_PREFIXES_HOMEPAGE = ["/"];
 
   let showFlowbox = $derived(
     !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
   );
 
-  let hiddenPaths = [
-    "/",
-    "/auth",
-    "/friends",
-    "/register",
-    "/login",
-    "/friends",
-  ];
-  let showAppComponents = $derived(!hiddenPaths.includes($page.url.pathname));
+  let hiddenPaths = ["/", "/auth", "/friends", "/register", "/login"];
+  let showAppComponents = $derived(hiddenPaths.includes($page.url.pathname));
 </script>
 
 <div class="website">
