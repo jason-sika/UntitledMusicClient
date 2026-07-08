@@ -366,31 +366,6 @@
     color: #621515;
   }
 
-  .connect {
-    color: #ffffff;
-  }
-
-  .connect p {
-    mix-blend-mode: plus-lighter;
-  }
-
-  .youtube {
-    background: linear-gradient(to bottom, #ffaaaa, #e16060);
-  }
-
-  .appleMusic {
-    background: linear-gradient(to bottom, #ffa5a570, #ff333370);
-  }
-
-  .spotify {
-    background: linear-gradient(to bottom, #b0ff8570, #00981c70);
-  }
-
-  select {
-    all: unset;
-    width: 100%;
-  }
-
   img.pfp {
     height: 70px;
     width: 70px;

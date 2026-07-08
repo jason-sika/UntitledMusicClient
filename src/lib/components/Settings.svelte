@@ -13,7 +13,6 @@
   let error = $state("");
   let success = $state("");
   let loading = $state(false);
-  let youtubeConnected = $state(false);
   let currentPage = $state("AccountSettings");
 
   function formatUsername(e) {
@@ -72,40 +71,6 @@
       error = "Network error — could not reach the server.";
     } finally {
       loading = false;
-    }
-  }
-
-  function connectYoutube() {
-    const width = 500;
-    const height = 650;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-      "/auth",
-      "youtube-auth",
-      `width=${width},height=${height},left=${left},top=${top}`,
-    );
-
-    // poll to detect when the popup closes (simplest approach)
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(timer);
-        // refresh connection status, e.g. re-check /api/me or a "youtube linked" flag
-        checkYoutubeStatus();
-      }
-    }, 500);
-  }
-
-  async function checkYoutubeStatus() {
-    try {
-      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
-        credentials: "include",
-      });
-      const data = await res.json();
-      youtubeConnected = !!data?.user?.youtubeConnected; // depends on what /api/me returns
-    } catch {
-      // re-fetch user/account state to reflect the new connection
     }
   }
 </script>

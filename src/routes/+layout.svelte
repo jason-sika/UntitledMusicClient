@@ -13,7 +13,15 @@
     !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
   );
 
-  let showAppComponents = $derived($page.url.pathname !== "/");
+  let hiddenPaths = [
+    "/",
+    "/auth",
+    "/friends",
+    "/register",
+    "/login",
+    "/friends",
+  ];
+  let showAppComponents = $derived(!hiddenPaths.includes($page.url.pathname));
 </script>
 
 <div class="website">

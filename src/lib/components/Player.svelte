@@ -57,45 +57,6 @@
     else player.play();
   }
 
-  function loadYouTubeAPI() {
-    return new Promise((resolve) => {
-      if (window.YT?.Player) {
-        resolve(window.YT);
-        return;
-      }
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      document.head.appendChild(tag);
-      window.onYouTubeIframeAPIReady = () => resolve(window.YT);
-    });
-  }
-
-  onMount(async () => {
-    const YT = await loadYouTubeAPI();
-
-    ytPlayer = new YT.Player(playerHost, {
-      height: "0",
-      width: "0",
-      playerVars: { autoplay: 0 },
-      events: {
-        onReady: () => player.attachPlayer(ytPlayer),
-        onStateChange: (e) => {
-          player.setPlaying(e.data === YT.PlayerState.PLAYING);
-          if (e.data === YT.PlayerState.ENDED) {
-            // no queue system yet — just stop cleanly at the end
-            player.setPlaying(false);
-          }
-        },
-      },
-    });
-
-    pollInterval = setInterval(() => {
-      if (ytPlayer?.getCurrentTime) {
-        player.setTime(ytPlayer.getCurrentTime(), ytPlayer.getDuration());
-      }
-    }, 500);
-  });
-
   onDestroy(() => {
     clearInterval(pollInterval);
     player.detachPlayer();
