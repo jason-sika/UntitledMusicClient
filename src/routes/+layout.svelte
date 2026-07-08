@@ -13,11 +13,7 @@
     !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
   );
 
-  let showAppComponents = $derived(
-    !EXEMPT_PREFIXES_HOMEPAGE.some((prefix) =>
-      $page.url.pathname.startsWith(prefix),
-    ),
-  );
+  let showAppComponents = $derived($page.url.pathname !== "/");
 </script>
 
 <div class="website">

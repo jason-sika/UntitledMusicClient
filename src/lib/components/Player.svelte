@@ -133,7 +133,10 @@
   </div>
 
   <div class="controls">
-    <button class="prev">Prev</button>
+    <button class="prev"
+      ><p>◀</p>
+      <p>◀</p></button
+    >
     <button
       class="play"
       class:paused={$player.isPlaying}
@@ -141,7 +144,10 @@
     >
       {$player.isPlaying ? "Ⅱ" : "►"}
     </button>
-    <button class="next">Next</button>
+    <button class="next"
+      ><p>►</p>
+      <p>►</p></button
+    >
     <button class="lyrics">Lyrics</button>
   </div>
 </div>
@@ -167,13 +173,15 @@
     flex-direction: row;
     justify-content: start;
     align-items: center;
-    gap: 20px;
+    gap: 10px;
     min-width: 265px;
   }
 
   .albumArt {
     width: 50px;
     height: 50px;
+    transform: rotate(-05deg);
+    box-shadow: 0px 0px 8px #00000070;
   }
 
   .text {
@@ -280,13 +288,42 @@
     gap: 8px;
     flex-shrink: 0;
     position: relative; /* anchor point for the dropdown */
+    text-align: center;
   }
 
   .play {
     font-weight: 400;
+    height: 36px;
+    width: 36px;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .play.paused {
     font-weight: 900;
+  }
+
+  .next {
+    height: 36px;
+    width: 36px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .next p {
+    margin-inline: -2px !important;
+  }
+
+  .prev {
+    height: 36px;
+    width: 36px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .prev p {
+    margin-inline: -2px !important;
   }
 </style>

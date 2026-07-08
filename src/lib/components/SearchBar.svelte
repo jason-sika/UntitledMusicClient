@@ -336,7 +336,7 @@
   });
 </script>
 
-<div class="searchtab">
+<!-- <div class="searchtab">
   <div class="formInput searchinput">
     <input
       type="text"
@@ -388,7 +388,7 @@
     {/if}
   </div>
   <div class="clear-all-fade"></div>
-</div>
+</div> --->
 
 <style>
   /* ============================================================

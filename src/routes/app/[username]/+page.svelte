@@ -246,38 +246,32 @@
       </div>
       <div class="info">
         <h1>{data.user.displayname}</h1>
-        <p class="username">@{data.user.username}</p>
-      </div>
-      <div class="tags">
-        {#each data.user.tags ?? [] as tag}
-          <span
-            class="tag"
-            style={tag.color
-              ? `background: ${tag.color}20; color: ${tag.color};`
-              : ""}
-          >
-            {tag.label}
-          </span>
-        {/each}
+
+        <div class="tags">
+          <p class="username">@{data.user.username}</p>
+          <!-- {#each data.user.tags ?? [] as tag} -->
+          <div class="tag rim">
+            <p>Beta Tester</p>
+            <!-- {tag.label} -->
+          </div>
+          <!-- {/each} -->
+        </div>
       </div>
 
       {#if !loadingRelationship && !isOwnProfile}
         <div class="actions">
           {#if requestState === "friends"}
-            <button
-              class="friendbtn rim"
-              onclick={() => (showPingModal = true)}
-            >
+            <button class="friendbtn" onclick={() => (showPingModal = true)}>
               Ping
             </button>
-            <button class="friendbtn rim" onclick={openRemoveFriendPopup}>
+            <button class="friendbtn" onclick={openRemoveFriendPopup}>
               Remove Friend
             </button>
           {:else if requestState === "pending"}
-            <button class="friendbtn rim" disabled>Request Sent</button>
+            <button class="friendbtn" disabled>Request Sent</button>
           {:else if requestState === "incoming"}
             <button
-              class="friendbtn rim"
+              class="friendbtn"
               onclick={acceptRequest}
               disabled={working}
             >
@@ -285,7 +279,7 @@
             </button>
           {:else}
             <button
-              class="friendbtn rim"
+              class="friendbtn"
               onclick={sendFriendRequest}
               disabled={working}
             >
@@ -300,6 +294,7 @@
 
 <style>
   .profilepage {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -320,9 +315,12 @@
     background: linear-gradient(to bottom, #ffffff70, #cecece70);
     background-size: cover;
     background-position: center;
+    border: 8px inset white;
+    background-color: #efefef;
   }
 
   .profileheader {
+    position: relative;
     display: flex;
     flex-direction: row;
     align-items: flex-end;
@@ -353,25 +351,29 @@
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
     align-items: center;
+    overflow: visible;
   }
 
   .tag {
+    position: relative;
     font-size: 12px;
     font-weight: 500;
     padding: 4px 10px;
 
-    background: #00000010;
+    background: linear-gradient(to bottom, #ffffff70, #cecece70);
     color: #000000;
     white-space: nowrap;
   }
 
   .actions {
+    position: relative;
     margin-left: auto;
   }
 
   .friendbtn {
+    position: relative;
     font-size: 14px;
     padding: 8px 16px;
     cursor: pointer;

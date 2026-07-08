@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import Settings from "./Settings.svelte";
   import { presence } from "$lib/stores/presence";
+  import { fade } from "svelte/transition";
   import PongModal from "./PongModal.svelte";
   import PingModal from "./PingModal.svelte";
   import { notifications as notificationsStore } from "$lib/stores/notifications";
@@ -30,6 +31,55 @@
   let loadingNotifications = $state(false);
   /** @type {Record<string, "online" | "away" | "dnd" | "offline">} */
   let onlineStatus = $derived($presence);
+  // --- ping/pong toast bubbles ---
+  const MAX_BUBBLES = 4;
+  const BUBBLE_LIFETIME_MS = 8000;
+  const BUBBLE_FRESHNESS_MS = 15000; // ignore old notifications loaded in bulk (e.g. from loadNotifications)
+
+  let bubbles = $state([]); // [{ id, notification }]
+  let seenBubbleIds = new Set();
+  let bubbleTimeouts = new Map();
+
+  function isFreshNotification(n) {
+    const created = n.createdAt ?? n.created_at ?? n.timestamp;
+    if (!created) return true; // no timestamp field to check, don't block on it
+    return Date.now() - new Date(created).getTime() < BUBBLE_FRESHNESS_MS;
+  }
+
+  function pushBubble(notification) {
+    bubbles = [...bubbles, { id: notification.id, notification }];
+    if (bubbles.length > MAX_BUBBLES) {
+      const [oldest, ...rest] = bubbles;
+      bubbles = rest;
+      dismissBubble(oldest.id, true);
+    }
+    const timeout = setTimeout(
+      () => dismissBubble(notification.id),
+      BUBBLE_LIFETIME_MS,
+    );
+    bubbleTimeouts.set(notification.id, timeout);
+  }
+
+  function dismissBubble(id, skipFilter = false) {
+    if (!skipFilter) bubbles = bubbles.filter((b) => b.id !== id);
+    const t = bubbleTimeouts.get(id);
+    if (t) {
+      clearTimeout(t);
+      bubbleTimeouts.delete(id);
+    }
+  }
+
+  $effect(() => {
+    for (const n of notifications) {
+      if (
+        (n.type === "ping" || n.type === "pong") &&
+        !seenBubbleIds.has(n.id)
+      ) {
+        seenBubbleIds.add(n.id);
+        if (isFreshNotification(n)) pushBubble(n);
+      }
+    }
+  });
   const unreadCount = $derived(notifications.filter((n) => !n.read).length);
 
   const ACTIONABLE_TYPES = new Set(["friend_request", "ping", "pong"]);
@@ -333,6 +383,7 @@
     friends.forEach(unwatchPresence);
     searchResults.forEach(unwatchPresence);
     presence.disconnect();
+    bubbleTimeouts.forEach(clearTimeout);
   });
 </script>
 
@@ -363,48 +414,6 @@
 {/if}
 
 <div class="sidebar">
-  <div class="you rim">
-    <div class="accountprev">
-      <div class="profilePicture rim">
-        <img
-          class="profilePicture"
-          src={user?.pfpUrl || "/images/plhd.png"}
-          alt="Profile picture"
-          onclick={() => userprofile(user?.username)}
-          style="cursor: pointer;"
-        />
-      </div>
-      <div
-        class="text"
-        onclick={() => userprofile(user?.username)}
-        style="cursor: pointer;"
-      >
-        <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
-        <p class="subtitle">
-          {user ? `@${user.username}` : ""}
-        </p>
-      </div>
-      <button class="settings" onclick={() => (showSettings = true)}>
-        <img class="status-icon2" src="/images/settings.png" alt="" /></button
-      >
-      <div class="select rim">
-        <img
-          class="status-icon2"
-          src={statusIcons[user?.status ?? "online"]}
-          alt=""
-        />
-        <select
-          onchange={(e) => presence.setStatus(e.target.value)}
-          value={user?.status ?? "online"}
-        >
-          <option value="online">Online</option>
-          <option value="away">Away</option>
-          <option value="dnd">Do Not Disturb</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
   <div class="tabview online rim">
     <div
       class="tabswitch"
@@ -415,6 +424,67 @@
         }
       }}
     >
+      {#if bubbles.length > 0}
+        <div class="bubbleStack">
+          {#each bubbles as item (item.id)}
+            <div class="bubbleWrapper" out:fade={{ duration: 200 }}>
+              <div class="bubble rim">
+                <button
+                  class="bubble-dismiss"
+                  onclick={() => dismissBubble(item.id)}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+                <div class="bubbleProfile">
+                  <div class="profilePicture rim">
+                    <img
+                      class="profilePicture"
+                      src={item.notification.actorPfp || "/images/plhd.png"}
+                      alt="Profile picture"
+                    />
+                  </div>
+                  <div class="text">
+                    <h1 class="Name">
+                      {item.notification.actorUsername ?? "Someone"}
+                    </h1>
+                    <p class="subtitle">
+                      {item.notification.type === "ping"
+                        ? "sent you a ping"
+                        : "ponged you back"}
+                    </p>
+                  </div>
+                </div>
+                {#if item.notification.subtitle}
+                  <p class="bubbleMessage">{item.notification.subtitle}</p>
+                {/if}
+                <div class="bubbleActions">
+                  {#if item.notification.type === "ping"}
+                    <button
+                      onclick={() => {
+                        pongTarget = item.notification;
+                        dismissBubble(item.id);
+                      }}
+                    >
+                      Pong
+                    </button>
+                  {:else if item.notification.type === "pong"}
+                    <button
+                      onclick={() => {
+                        pingAgainTarget = item.notification;
+                        dismissBubble(item.id);
+                      }}
+                    >
+                      Ping again
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              <div class="bubbleSquare rim"></div>
+            </div>
+          {/each}
+        </div>
+      {/if}
       <button
         class="tab"
         class:active={activeTopTab === "Friends"}
@@ -707,6 +777,47 @@
       </div>
     {/if}
   </div>
+  <div class="you rim">
+    <div class="accountprev">
+      <div class="profilePicture rim">
+        <img
+          class="profilePicture"
+          src={user?.pfpUrl || "/images/plhd.png"}
+          alt="Profile picture"
+          onclick={() => userprofile(user?.username)}
+          style="cursor: pointer;"
+        />
+      </div>
+      <div
+        class="text"
+        onclick={() => userprofile(user?.username)}
+        style="cursor: pointer;"
+      >
+        <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
+        <p class="subtitle">
+          {user ? `@${user.username}` : ""}
+        </p>
+      </div>
+      <button class="settings" onclick={() => (showSettings = true)}>
+        <img class="status-icon2" src="/images/settings.png" alt="" /></button
+      >
+      <div class="select rim">
+        <img
+          class="status-icon2"
+          src={statusIcons[user?.status ?? "online"]}
+          alt=""
+        />
+        <select
+          onchange={(e) => presence.setStatus(e.target.value)}
+          value={user?.status ?? "online"}
+        >
+          <option value="online">Online</option>
+          <option value="away">Away</option>
+          <option value="dnd">Do Not Disturb</option>
+        </select>
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -761,7 +872,7 @@
 
   .settings {
     font-size: 12px;
-    padding: 5px 10px;
+    padding: 10px 10px;
     justify-content: center;
     align-items: center;
     flex-direction: column;
@@ -773,13 +884,14 @@
   .select {
     position: relative;
     font-size: 12px;
-    padding: 5px 10px;
+    padding: 10px 10px;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     display: flex;
     pointer-events: all;
     opacity: 1 !important;
+    background: linear-gradient(to bottom, #ffffff70, #cecece70);
   }
 
   .select select {
@@ -788,6 +900,7 @@
     height: 100%;
     width: 100% !important;
     opacity: 0;
+    cursor: pointer;
   }
 
   .status-icon2 {
@@ -795,6 +908,7 @@
     width: 15px;
     height: 15px;
     z-index: 20;
+    pointer-events: none;
   }
 
   /* ============================================================
@@ -886,6 +1000,163 @@
   .text,
   .notiftext {
     height: auto;
+  }
+
+  .bubbleStack {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    left: 265px;
+    top: 10px;
+    margin-left: 24px;
+    z-index: 100;
+  }
+
+  .bubbleWrapper {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    gap: 5px;
+    animation: bubblepop 1s
+      linear(
+        0,
+        0.002 0.3%,
+        0.01 0.7%,
+        0.02 1%,
+        0.038 1.4%,
+        0.089 2.2%,
+        0.157 3%,
+        0.315 4.5%,
+        0.663 7.4%,
+        0.798 8.6%,
+        0.92 9.8%,
+        1.023 11%,
+        1.106 12.2%,
+        1.139 12.8%,
+        1.167 13.4%,
+        1.19 14%,
+        1.208 14.6%,
+        1.221 15.2%,
+        1.231 15.9%,
+        1.235 16.6%,
+        1.234 17.3%,
+        1.227 18.1%,
+        1.216 18.9%,
+        1.2 19.7%,
+        1.179 20.6%,
+        1.055 25.1%,
+        1.028 26.2%,
+        1.004 27.3%,
+        0.981 28.6%,
+        0.964 29.9%,
+        0.952 31.2%,
+        0.946 32.5%,
+        0.945 34%,
+        0.949 35.7%,
+        0.959 37.5%,
+        0.986 41.8%,
+        0.999 44%,
+        1.008 46.5%,
+        1.012 49.1%,
+        1.012 52.5%,
+        1 60.7%,
+        0.997 65.5%,
+        1.001 81.8%,
+        1
+      );
+  }
+
+  @keyframes bubblepop {
+    0% {
+      transform-origin: 0% 20%;
+      transform: scale(0.2);
+      opacity: 0.2;
+    }
+    100% {
+      transform-origin: 0% 20%;
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 265px;
+    padding: 10px;
+    z-index: 100;
+    background: linear-gradient(to bottom, #ffffff, #eeeeee);
+  }
+
+  .bubble p {
+    z-index: 21;
+  }
+
+  .bubbleSquare {
+    position: absolute;
+    top: 20px;
+    left: -10px;
+    width: 20px;
+    height: 20px;
+    z-index: 99;
+    transform: rotate(45deg);
+    background: linear-gradient(to bottom, #ffffff, #eeeeee);
+  }
+
+  .bubbleProfile {
+    display: flex;
+    flex-direction: row;
+    gap: 5px;
+  }
+
+  .bubble-dismiss {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.3;
+    background: none;
+    border-radius: 50%;
+    z-index: 2;
+  }
+
+  .bubble-dismiss:hover {
+    opacity: 0.8;
+    background: #00000010;
+  }
+
+  .bubbleMessage {
+    font-size: 13px;
+    opacity: 0.7;
+    margin: 0;
+  }
+
+  .bubbleActions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .bubbleActions button {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 8px;
+    border: none;
+    cursor: pointer;
+    background: #2b6cb0;
+    color: white;
+    transition: opacity 0.15s ease;
+  }
+
+  .bubbleActions button:hover {
+    opacity: 0.85;
   }
 
   /* ============================================================
@@ -1229,8 +1500,8 @@
     height: 50px;
     width: 50px;
     position: absolute;
-    top: -10px;
-    right: -10px;
+    top: -7px;
+    right: -7px;
     mask-image: linear-gradient(
       to bottom,
       black 0%,
@@ -1242,6 +1513,7 @@
   .notification_image img {
     height: 50px;
     width: 50px;
+    background: none;
   }
 
   /* per-notification unread indicator, sits at the end of the row */

@@ -42,7 +42,9 @@
       </div>
     </div>
     <div class="bottom">
-      <p class="desc">-Project moving to something else, stay tuned</p>
+      <p class="desc">
+        A local music player, share what you listen to with your friends
+      </p>
       <div class="buttonwrapper">
         <button onclick={() => goto("/app")}>{button}</button>
         <button
@@ -57,7 +59,7 @@
   </div>
   <div class="side2">
     <h1>Enjoy music once again.</h1>
-    <img src="/images/plhd.png" alt="umcUI" />
+    <img src="/images/image.png" alt="umcUI" />
   </div>
 </div>
 
