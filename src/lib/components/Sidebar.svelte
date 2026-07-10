@@ -721,71 +721,6 @@
     {/if}
   </div>
 
-  <div class="libTabView rim">
-    <div
-      class="libTabSwitch"
-      onwheel={(e) => {
-        if (e.deltaY !== 0) {
-          e.preventDefault();
-          e.currentTarget.scrollLeft += e.deltaY;
-        }
-      }}
-    >
-      <button
-        class="libTab"
-        class:libTabActive={activeLibraryTab === "Playlists"}
-        onclick={(e) => {
-          activeLibraryTab = "Playlists";
-          scrollTabToStart(e);
-        }}>Playlists</button
-      >
-
-      <button
-        class="libTab"
-        class:libTabActive={activeLibraryTab === "Albums"}
-        onclick={(e) => {
-          activeLibraryTab = "Albums";
-          scrollTabToStart(e);
-        }}>Albums</button
-      >
-
-      <button
-        class="libTab"
-        class:libTabActive={activeLibraryTab === "Songs"}
-        onclick={(e) => {
-          activeLibraryTab = "Songs";
-          scrollTabToStart(e);
-        }}>Songs</button
-      >
-
-      <button
-        class="libTab"
-        class:libTabActive={activeLibraryTab === "Artists"}
-        onclick={(e) => {
-          activeLibraryTab = "Artists";
-          scrollTabToStart(e);
-        }}>Artists</button
-      >
-    </div>
-
-    {#if activeLibraryTab === "Playlists"}
-      <div class="playlistsPanel">
-        <p class="playlistsEmptyState">No playlists yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Albums"}
-      <div class="albumsPanel">
-        <p class="albumsEmptyState">No albums yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Songs"}
-      <div class="songsPanel">
-        <p class="songsEmptyState">No songs yet.</p>
-      </div>
-    {:else if activeLibraryTab === "Artists"}
-      <div class="artistsPanel">
-        <p class="artistsEmptyState">No artists yet.</p>
-      </div>
-    {/if}
-  </div>
   <div class="acctBar rim">
     <div class="acctRow">
       <div class="acctPfpWrap rim">
@@ -1188,7 +1123,7 @@
     align-items: center;
     background: linear-gradient(to bottom, #ffffff70, #eeeeee70);
     gap: 0px;
-    height: 45.8% !important;
+    height: 100% !important;
     width: 100%;
   }
 
@@ -1721,76 +1656,6 @@
   }
 
   .notifEmptyState {
-    font-size: 12px;
-    opacity: 0.4;
-    padding: 10px;
-    text-align: center;
-  }
-
-  /* ============================================================
-     LIBRARY TAB SWITCHER (Playlists/Albums/Songs/Artists)
-     ============================================================ */
-  .libTabView {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: start;
-    align-items: center;
-    background: linear-gradient(to bottom, #ffffff70, #eeeeee70);
-    gap: 0px;
-    height: 45.8% !important;
-    width: 100%;
-  }
-
-  .libTabSwitch {
-    display: flex;
-    flex-direction: row;
-    justify-content: start;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    height: 80px !important;
-    padding: 20px 20px 10px 20px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .libTab {
-    all: unset;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    width: fit-content;
-    font-family: "InterVariable", sans-serif !important;
-    font-size: 24px;
-    font-weight: 300;
-    opacity: 0.2;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-    scroll-margin-inline: 20px;
-  }
-
-  .libTabActive {
-    opacity: 0.7;
-  }
-
-  /* ============================================================
-     LIBRARY PANELS
-     ============================================================ */
-  .playlistsPanel,
-  .albumsPanel,
-  .songsPanel,
-  .artistsPanel {
-    width: 100%;
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  .playlistsEmptyState,
-  .albumsEmptyState,
-  .songsEmptyState,
-  .artistsEmptyState {
     font-size: 12px;
     opacity: 0.4;
     padding: 10px;

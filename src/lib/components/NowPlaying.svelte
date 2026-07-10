@@ -1,9 +1,9 @@
 <script>
   import { tick } from "svelte";
-  import { playbackSync } from "$lib/stores/playbackSync";
-  import * as m from "$lib/paraglide/messages.js";
+  import { player } from "$lib/stores/player";
   import Playback3 from "$lib/components/playback3.svelte";
   import { lyrics } from "$lib/stores/lyrics";
+  import Player from "$lib/components/Player.svelte";
 
   // ── PROPS ──────────────────────────────────────────────────────────────────
 
@@ -39,29 +39,20 @@
 
   // ── DERIVED FROM STORES ────────────────────────────────────────────────────
 
-  // playbackSync is the single source of truth — device-first, Last.fm fallback
-  let {
-    elapsed,
-    duration,
-    progress,
-    matched,
-    device,
-    song,
-    artist,
-    album,
-    album_art,
-    animated_art,
-  } = $derived($playbackSync);
+  // player is the single source of truth — local <audio> playback state
+  let elapsed = $derived($player.currentTime);
+  let duration = $derived($player.duration);
+  let progress = $derived(duration > 0 ? elapsed / duration : 0);
+  let song = $derived($player.title);
+  let artist = $derived($player.artist);
+  let album_art = $derived($player.albumArt);
 
-  let songDisplay = $derived(song || device?.title || "Loading...");
-  let artistDisplay = $derived(artist || device?.artist || "—");
+  let songDisplay = $derived(song || "Loading...");
+  let artistDisplay = $derived(artist || "—");
 
   let lyricsState = $derived($lyrics);
   let lyricsMatchDevice = $derived(
-    device?.title && device?.artist
-      ? `${device.title}::${device.artist}::${device.album || ""}` ===
-          lyricsState.currentKey
-      : false,
+    song && artist ? `${song}::${artist}` === lyricsState.currentKey : false,
   );
   let parsedMeta = $derived(
     src ? null : ttmlString ? parseMeta(ttmlString) : null,
@@ -73,7 +64,7 @@
   // ── DERIVED FROM elapsed + lines ───────────────────────────────────────────
 
   let activeIndices = $derived.by(() => {
-    const t = $playbackSync.elapsed;
+    const t = $player.currentTime;
     const next = new Set();
     lines.forEach((line, i) => {
       if (t >= line.begin && t < line.end) next.add(i);
@@ -82,7 +73,7 @@
   });
 
   let backActiveIndices = $derived.by(() => {
-    const t = $playbackSync.elapsed;
+    const t = $player.currentTime;
     const backActive = new Set();
     lines.forEach((line, i) => {
       if (line.isBackground) {
@@ -749,11 +740,10 @@
     if (lyr.song && lyr.song !== displayedLyr.song) displayedLyr = { ...lyr };
   });
 
-  // ── ARTWORK SYNC — playbackSync owns enrichment, we just mirror it ─────────
+  // ── ARTWORK SYNC — mirrors player.js albumArt ───────────────────────────────
 
   $effect(() => {
     const newImage = album_art ?? null;
-    const newAnimatedArt = animated_art || null; // coerce "" to null
 
     isFlipping = true;
     displayedAnimatedArt = null; // ← clear immediately so the old video unmounts
@@ -761,7 +751,6 @@
 
     const timer = setTimeout(() => {
       displayedImage = newImage;
-      displayedAnimatedArt = newAnimatedArt;
       setTimeout(() => (isFlipping = false), 650);
     }, 300);
 
@@ -964,8 +953,8 @@
                       {@const gapAfter =
                         nextLine &&
                         nextLine.begin - line.end > 2 &&
-                        $playbackSync.elapsed >= line.end &&
-                        $playbackSync.elapsed < nextLine.begin}
+                        $player.currentTime >= line.end &&
+                        $player.currentTime < nextLine.begin}
                       <li
                         bind:this={lineEls[i]}
                         class="lyrics-line"
@@ -985,7 +974,7 @@
                               isWordLevelData && si === longestIdx && isLong}
                             {@render lyricWord(
                               syl,
-                              $playbackSync.elapsed,
+                              $player.currentTime,
                               isLong,
                               isLongest,
                               i,
@@ -1022,63 +1011,28 @@
             </div>
           {/if}
           <div class="center-bottom">
-            <!-- <div class="buttonwrap">
-              {#if !loading}
-                <a
-                  class="translation-toggle"
-                  onclick={() => (translation = !translation)}
-                >
-                  {#if !translation}
-                     - Trad
-                  {:else}
-                     - Trad
-                  {/if}
-                </a>
-              {/if}
-              <a class="debug-toggle" onclick={() => (debug = !debug)}
-                >⁂ - Debug</a
-              >
-              <a
-                class="lyrics-toggle"
-                onclick={() => (visibleToggle = !visibleToggle)}
-              >
-                {visibleToggle ? " - Lyrics" : "🄰 - Lyrics"}
-              </a>
-            </div> -->
             <Playback3 />
             <div class="wrapper1" class:menushy={!submenuOpen}>
               <div class="buttonwrap">
-                <a href="/">↖ - Home</a>
+                <a href="/app">↖ - Home</a>
                 {#if !loading}
-                  <a
-                    class="sidebar-toggle"
-                    onclick={() => (sidebarVisible = !sidebarVisible)}
-                  >
-                    {sidebarVisible ? " - Info" : " - Info"}
-                  </a>
-                  <a
-                    class="translation-toggle"
-                    onclick={() => (translation = !translation)}
-                  >
-                    {#if !translation}
-                       - Trad
+                  <a class="translation-toggle" onclick={() => (translation = !translation)}
+                    >{#if !translation}
+                       - Trad
                     {:else}
-                       - Trad
+                       - Trad
                     {/if}
                   </a>
                 {/if}
                 <a class="debug-toggle" onclick={() => (debug = !debug)}
                   >⁂ - Debug</a
                 >
-                <a
-                  class="lyrics-toggle"
-                  onclick={() => (visibleToggle = !visibleToggle)}
+                <a class="lyrics-toggle" onclick={() => (visibleToggle = !visibleToggle)}
+                  >{visibleToggle ? " - Lyrics" : "🄰 - Lyrics"}</a
                 >
-                  {visibleToggle ? " - Lyrics" : "🄰 - Lyrics"}
-                </a>
               </div>
               <p class="herodetail" style="width: 100%;">
-                {m.music_detail4()}
+                  Lyrics from LRCLIB, some songs are synced by me myself and my friends. Those will show up word per word.
               </p>
             </div>
           </div>
@@ -1099,8 +1053,8 @@
         >
           match: {lyricsMatchDevice} <br />
           key: {lyricsState.currentKey} <br />
-          device: {device.title}::{device.artist}::{device.album}
-          isPlaying: {device.isPlaying} <br />
+          device: {song}::{artist}
+          isPlaying: {$player.isPlaying} <br />
           lines: {lines.length} <br />
           loading: {loading}
           src: {!!src} <br />
@@ -1108,7 +1062,7 @@
           song: {songDisplay} <br />
           image: {displayedImage} <br />
           <a class="stringifier" onclick={() => (stringshown = !stringshown)}>
-            {stringshown ? " String" : " String"}
+            {stringshown ? " String" : " String"}
           </a>
           {#if stringshown}
             stringify: {JSON.stringify($lyrics, null, 2)}
@@ -1120,6 +1074,7 @@
     <!-- ── FOOTER ── -->
   </div>
 </div>
+
 
 <style>
   @import "src/app.css";
@@ -1268,6 +1223,8 @@
   /* ── ARTWORK ────────────────────────────────────────────────────────────── */
 
   .artworkwrap {
+      display: flex;
+      flex-direction: column;
     position: relative;
     width: 30dvw;
     height: 15dvw;
@@ -1666,7 +1623,6 @@
     gap: 0.15em 0;
     font-size: var(--lyrics-font-size);
     font-weight: 700;
-    /* font-weight: 500; */
     line-height: 1.15;
     overflow: visible;
   }
@@ -1702,12 +1658,12 @@
   }
 
   .lyric-word.is-active {
-    transform: scale(1.02) translateX(2px);
-    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-    /* filter: drop-shadow(0px 0px calc(var(--progress) * 8px) #ffffff2f);
-    font-weight: calc(500 + var(--progress) * 200) !important;
-    letter-spacing: calc(0.01em + var(--progress) * 0.02em) !important; */
-  }
+      transform: scale(1.02) translateX(2px);
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+      /* filter: drop-shadow(0px 0px calc(var(--progress) * 8px) #ffffff2f);
+      font-weight: calc(500 + var(--progress) * 200) !important;
+      letter-spacing: calc(0.01em + var(--progress) * 0.02em) !important; */
+    }
 
   .lyric-word.is-past {
     transform: scale(1);

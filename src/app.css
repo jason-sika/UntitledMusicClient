@@ -85,6 +85,80 @@ button:before {
   pointer-events: none;
 }
 
+/* Animatable custom property for letter bloom */
+@property --letter-bloom-scale {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --pos {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: -500%;
+}
+
+@property --feather {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 20px;
+}
+
+a {
+  all: unset;
+  color: #ffffff;
+  cursor: default;
+  width: fit-content !important;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+  background: linear-gradient(
+    to bottom,
+    #ffffff42 0%,
+    #7c7c7c55 20%,
+    #7c7c7c55 80%,
+    #ffffff42 100%
+  );
+  box-shadow:
+    inset 0px 1px 1px 0px #ffffff1e,
+    inset 0px -1px 1px 0px #ffffff1e,
+    1px 0px 1px 0px #0000004a,
+    -1px 0px 1px 0px #0000004a;
+  padding: 5px 10px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 100;
+  border-radius: 100px;
+  margin-inline: 0px;
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  color: #ffffff;
+  opacity: 1;
+  background: linear-gradient(
+    to bottom,
+    #ffffff52 0%,
+    #ffffff47 20%,
+    #ffffff47 80%,
+    #ffffff52 100%
+  );
+  box-shadow:
+    inset 0px 1px 1px 0px #ffffff7f,
+    inset 0px -1px 1px 0px #ffffff7f,
+    1px 0px 1px 0px #000000,
+    -1px 0px 1px 0px #000000,
+    0px 3px 2px 0px #ffffff16;
+  transition: all 0.2s ease;
+  transform: scale(1.05);
+  mix-blend-mode: plus-lighter;
+}
+
+a:active {
+  transform: scale(0.95);
+  transition: all 0.2s ease;
+  opacity: 0.5;
+}
+
 /*
 button:before {
   content: "";

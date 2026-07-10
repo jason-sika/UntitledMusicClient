@@ -37,6 +37,7 @@ function createPlayerStore() {
   function attachPlayer(instance) {
     audioEl = instance;
     update((s) => ({ ...s, ready: true }));
+    startTicker();
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => play());
@@ -52,6 +53,7 @@ function createPlayerStore() {
   }
 
   function detachPlayer() {
+    stopTicker();
     if (currentObjectUrl) {
       URL.revokeObjectURL(currentObjectUrl);
       currentObjectUrl = null;
@@ -127,6 +129,29 @@ function createPlayerStore() {
 
   function pause() {
     audioEl?.pause();
+  }
+
+  let rafId = null;
+
+  function startTicker() {
+    if (rafId) return;
+    const tick = () => {
+      if (audioEl && !audioEl.paused) {
+        update((s) => {
+          // avoid work if duration isn't known yet
+          return { ...s, currentTime: audioEl.currentTime };
+        });
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stopTicker() {
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   }
 
   function seek(fraction) {

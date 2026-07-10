@@ -2,8 +2,10 @@
   import { onMount, onDestroy } from "svelte";
   import { player } from "$lib/stores/player";
   import { librarySongs } from "$lib/stores/library";
+    import { goto } from "$app/navigation";
 
   let audioEl = $state(null);
+  let { hidden = false } = $props();
 
   let barWrap = $state(null);
   let dragging = $state(false);
@@ -88,10 +90,6 @@
   onMount(() => {
     player.attachPlayer(audioEl);
   });
-
-  onDestroy(() => {
-    player.detachPlayer();
-  });
 </script>
 
 <audio
@@ -104,9 +102,9 @@
   style="display:none;"
 ></audio>
 
-<div class="player rim">
+<div class="player rim" class:hidden>
   <div class="meta">
-    <img class="albumArt rim" src={$player.albumArt} alt="Album Art" />
+    <img class="albumArt rim" src={$player.albumArt} alt="Album Art" onclick={() => goto("/app/nowplaying")} />
     <div class="text">
       <h1 class="title">{$player.title || "Nothing playing"}</h1>
       <p class="artist">{$player.artist}</p>
@@ -154,6 +152,11 @@
 </div>
 
 <style>
+
+    .player.hidden {
+      display: none;
+    }
+
   .player {
     display: flex;
     position: relative;

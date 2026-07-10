@@ -19,7 +19,7 @@
   let showFlowbox = $derived(
     !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
   );
-  let hiddenPaths = ["/", "/auth", "/friends", "/register", "/login"];
+  let hiddenPaths = ["/", "/auth", "/friends", "/register", "/login", "/app/nowplaying"];
   let showAppComponents = $derived(!hiddenPaths.includes($page.url.pathname));
 
   // --- Local folder gate, scoped to /app and anything under it ---
@@ -36,6 +36,40 @@
     get handle() {
       return libraryHandle;
     },
+  });
+
+  $effect(() => {
+    const root = document.documentElement;
+    const path = $page.url.pathname;
+
+    if (path === "/lyrics") {
+      root.style.setProperty("--active-word", "#ffffff");
+      root.style.setProperty("--lyrics-font-size", "40px");
+      root.style.setProperty(
+        "--lyrics-upcoming-color",
+        "rgba(255, 255, 255, 0.289)",
+      );
+      root.style.setProperty(
+        "--lyrics-past-color",
+        "rgba(255, 255, 255, 0.75)",
+      );
+    } else if (path === "/app/nowplaying") {
+      root.style.setProperty("--active-word", "#ffffff");
+      root.style.setProperty("--lyrics-font-size", "2em");
+      root.style.setProperty(
+        "--lyrics-upcoming-color",
+        "rgba(255, 255, 255, 0.289)",
+      );
+      root.style.setProperty(
+        "--lyrics-past-color",
+        "rgba(255, 255, 255, 0.75)",
+      );
+    } else if (path === "/") {
+      root.style.setProperty("--active-word", "var(--first)");
+      root.style.setProperty("--lyrics-font-size", "20px");
+      root.style.setProperty("--lyrics-upcoming-color", "var(--third)");
+      root.style.setProperty("--lyrics-past-color", "var(--second)");
+    }
   });
 
   async function evaluateFolderGate() {
@@ -163,9 +197,7 @@
       </div>
     {/if}
   </div>
-  {#if showAppComponents}
-    <Player />
-  {/if}
+  <Player hidden={!showAppComponents} />
 </div>
 
 <style>
