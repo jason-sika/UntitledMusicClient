@@ -22,6 +22,11 @@
   let activeTopTab = $state("Friends");
   let activeLibraryTab = $state("Playlists");
   let hasLoadedNotifications = $state(false);
+  let sfx;
+  function playNotifSound() {
+    sfx.currentTime = 0;
+    sfx.play().catch(() => {}); // swallow autoplay-block errors
+  }
 
   // search state
   let query = $state("");
@@ -48,6 +53,7 @@
 
   function pushBubble(notification) {
     bubbles = [...bubbles, { id: notification.id, notification }];
+    playNotifSound();
     if (bubbles.length > MAX_BUBBLES) {
       const [oldest, ...rest] = bubbles;
       bubbles = rest;
@@ -412,11 +418,16 @@
     targetDisplayname={pingAgainTarget.actorUsername}
   />
 {/if}
-
-<div class="sidebar">
-  <div class="tabview online rim">
+<audio
+  bind:this={sfx}
+  src="/sounds/notification.wav"
+  preload="auto"
+  style="display: none;"
+></audio>
+<div class="sidebarShell">
+  <div class="topTabView rim">
     <div
-      class="tabswitch"
+      class="topTabSwitch"
       onwheel={(e) => {
         if (e.deltaY !== 0) {
           e.preventDefault();
@@ -428,27 +439,27 @@
         <div class="bubbleStack">
           {#each bubbles as item (item.id)}
             <div class="bubbleWrapper" out:fade={{ duration: 200 }}>
-              <div class="bubble rim">
+              <div class="bubbleCard rim">
                 <button
-                  class="bubble-dismiss"
+                  class="bubbleDismissBtn"
                   onclick={() => dismissBubble(item.id)}
                   aria-label="Dismiss"
                 >
                   ×
                 </button>
-                <div class="bubbleProfile">
-                  <div class="profilePicture rim">
+                <div class="bubbleProfileRow">
+                  <div class="bubblePfpWrap rim">
                     <img
-                      class="profilePicture"
+                      class="bubblePfp"
                       src={item.notification.actorPfp || "/images/plhd.png"}
                       alt="Profile picture"
                     />
                   </div>
-                  <div class="text">
-                    <h1 class="Name">
+                  <div class="bubbleText">
+                    <h1 class="bubbleName">
                       {item.notification.actorUsername ?? "Someone"}
                     </h1>
-                    <p class="subtitle">
+                    <p class="bubbleSubtitle">
                       {item.notification.type === "ping"
                         ? "sent you a ping"
                         : "ponged you back"}
@@ -486,8 +497,8 @@
         </div>
       {/if}
       <button
-        class="tab"
-        class:active={activeTopTab === "Friends"}
+        class="topTab"
+        class:topTabActive={activeTopTab === "Friends"}
         onclick={(e) => {
           activeTopTab = "Friends";
           scrollTabToStart(e);
@@ -495,20 +506,21 @@
       >
 
       <button
-        class="tab"
-        class:active={activeTopTab === "Notification"}
-        class:unreadTab={unreadCount > 0}
+        class="topTab"
+        class:topTabActive={activeTopTab === "Notification"}
+        class:topTabUnread={unreadCount > 0}
         onclick={(e) => {
           activeTopTab = "Notification";
           scrollTabToStart(e);
         }}
       >
-        Notification{#if unreadCount > 0}<span class="unread-dot"></span>{/if}
+        Notification{#if unreadCount > 0}<span class="topTabUnreadDot"
+          ></span>{/if}
       </button>
 
       <button
-        class="tab"
-        class:active={activeTopTab === "Find"}
+        class="topTab"
+        class:topTabActive={activeTopTab === "Find"}
         onclick={(e) => {
           activeTopTab = "Find";
           scrollTabToStart(e);
@@ -517,41 +529,38 @@
     </div>
 
     {#if activeTopTab === "Friends"}
-      <div class="friends">
+      <div class="friendsList">
         {#if loadingFriends}
-          <p class="empty-state">Loading friends...</p>
+          <p class="friendsEmptyState">Loading friends...</p>
         {:else if friends.length === 0}
-          <p class="empty-state">No friends yet.</p>
+          <p class="friendsEmptyState">No friends yet.</p>
         {:else}
           {#each friends as friend}
-            <div
-              class="friend you"
-              onclick={() => userprofile(friend.username)}
-            >
-              <div class="profilePicture rim" style="position: relative;">
+            <div class="friendRow" onclick={() => userprofile(friend.username)}>
+              <div class="friendPfpWrap rim">
                 <img
-                  class="profilePicture rim"
+                  class="friendPfp rim"
                   src={friend.pfpUrl || "/images/plhd.png"}
                   alt="Profile picture"
                 />
                 <img
-                  class="status-icon"
+                  class="friendStatusIcon"
                   src={statusIcons[presenceStatus(friend)]}
                   alt=""
                 />
               </div>
-              <div class="text notiftext">
-                <h1 class="Name">{friend.displayname}</h1>
-                <p class="subtitle subtitle">@{friend.username}</p>
+              <div class="friendText">
+                <h1 class="friendName">{friend.displayname}</h1>
+                <p class="friendSubtitle">@{friend.username}</p>
               </div>
             </div>
           {/each}
         {/if}
-        <div class="clear-all-fade"></div>
+        <div class="friendsFade"></div>
       </div>
     {:else if activeTopTab === "Find"}
-      <div class="searchtab">
-        <div class="formInput searchinput">
+      <div class="searchPanel">
+        <div class="searchInputWrap">
           <input
             type="text"
             placeholder="@username..."
@@ -560,103 +569,103 @@
           />
         </div>
 
-        <div class="searchresults">
+        <div class="searchResultsList">
           {#if !query.startsWith("@")}
-            <p class="empty-state"></p>
+            <p class="searchEmptyState"></p>
           {:else if query.slice(1).trim().length < 1}
-            <p class="empty-state">Type a name after @</p>
+            <p class="searchEmptyState">Type a name after @</p>
           {:else if searching}
-            <p class="empty-state">Finding...</p>
+            <p class="searchEmptyState">Finding...</p>
           {:else if searchResults.length === 0}
-            <p class="empty-state">No users found.</p>
+            <p class="searchEmptyState">No users found.</p>
           {:else}
             {#each searchResults as result}
               <div
-                class="stackV"
+                class="searchResultCard"
                 onclick={() => selectFindResult(result.username)}
               >
                 {#if result.bannerUrl}
                   <img
-                    class="profileBanner"
+                    class="searchBanner"
                     src={result.bannerUrl}
                     alt="Profile Banner"
                   />
                 {/if}
-                <div class="someone you">
-                  <div class="profilePicture rim" style="position: relative;">
+                <div class="searchRow">
+                  <div class="searchPfpWrap rim">
                     <img
-                      class="profilePicture rim"
+                      class="searchPfp rim"
                       src={result.pfpUrl || "/images/plhd.png"}
                       alt="Profile picture"
                     />
                     <img
-                      class="status-icon"
+                      class="searchStatusIcon"
                       src={statusIcons[presenceStatus(result)]}
                       alt=""
                     />
                   </div>
-                  <div class="text notiftext">
-                    <h1 class="Name">{result.displayname}</h1>
-                    <p class="subtitle subtitle">@{result.username}</p>
+                  <div class="searchText">
+                    <h1 class="searchName">{result.displayname}</h1>
+                    <p class="searchSubtitle">@{result.username}</p>
                   </div>
                 </div>
               </div>
             {/each}
           {/if}
         </div>
-        <div class="clear-all-fade"></div>
+        <div class="searchFade"></div>
       </div>
     {:else if activeTopTab === "Notification"}
-      <div class="feed">
-        <div class="list">
+      <div class="notifPanel">
+        <div class="notifList">
           {#if loadingNotifications}
-            <p class="empty-state">Loading...</p>
+            <p class="notifEmptyState">Loading...</p>
           {:else if notifications.length === 0}
-            <p class="empty-state">No notifications yet.</p>
+            <p class="notifEmptyState">No notifications yet.</p>
           {:else}
             {#each notifications as notification}
               <div
-                class="notification rim"
-                class:unread={!notification.read}
+                class="notifCard"
+                class:notifCardUnread={!notification.read}
                 onclick={() => handleNotificationClick(notification)}
               >
                 <button
-                  class="dismiss-btn"
+                  class="notifDismissBtn"
                   onclick={(e) => dismissNotification(e, notification)}
                   aria-label="Dismiss"
                 >
                   ×
                 </button>
-                <div class="notifBody">
-                  <div class="stackH">
-                    <div class="notification_image">
+                <div class="notifCardBody">
+                  <div class="notifRow">
+                    <div class="notifTypeIconWrap">
                       <img
-                        class="profilePicture"
+                        class="notifTypeIcon"
                         src={notificationIcons[notification.type] ||
                           "/images/plhd.png"}
                         alt=""
                       />
                     </div>
                     {#if notification.actorPfp || notification.actorUsername}
-                      <div class="altuser_image rim">
+                      <div class="notifActorPfpWrap rim">
                         <img
-                          class="profilePicture rim"
+                          class="notifActorPfp rim"
                           src={notification.actorPfp || "/images/plhd.png"}
                           alt=""
                         />
                       </div>
                     {/if}
-                    <div class="text notiftext">
-                      <h1 class="Title">{notification.title}</h1>
-                      <p class="subtitle">{notification.subtitle}</p>
+                    <div class="notifText">
+                      <h1 class="notifTitle">{notification.title}</h1>
+                      <p class="notifSubtitle">{notification.subtitle}</p>
                     </div>
                     {#if !notification.read}
-                      <span class="unread-dot"></span>
+                      <span class="notifRowUnreadDot"></span>
                     {/if}
                   </div>
                 </div>
                 {#if notification.type === "friend_request" && notification.data?.friendshipId}
-                  <div class="notifActions">
+                  <div class="notifActionsRow">
                     <button
                       onclick={(e) => {
                         e.stopPropagation();
@@ -676,7 +685,7 @@
                   </div>
                 {:else if notification.type === "ping"}
                   <div
-                    class="notifActions"
+                    class="notifActionsRow"
                     onclick={(e) => e.stopPropagation()}
                   >
                     <button onclick={() => (pongTarget = notification)}
@@ -685,7 +694,7 @@
                   </div>
                 {:else if notification.type === "pong"}
                   <div
-                    class="notifActions"
+                    class="notifActionsRow"
                     onclick={(e) => e.stopPropagation()}
                   >
                     <button onclick={() => (pingAgainTarget = notification)}
@@ -702,8 +711,8 @@
         </div>
 
         {#if notifications.length > 0}
-          <div class="clear-all-fade">
-            <button class="clear-all" onclick={clearAllNotifications}>
+          <div class="notifFade">
+            <button class="notifClearAllBtn" onclick={clearAllNotifications}>
               Clear all
             </button>
           </div>
@@ -712,9 +721,9 @@
     {/if}
   </div>
 
-  <div class="tabview library rim">
+  <div class="libTabView rim">
     <div
-      class="tabswitch"
+      class="libTabSwitch"
       onwheel={(e) => {
         if (e.deltaY !== 0) {
           e.preventDefault();
@@ -723,8 +732,8 @@
       }}
     >
       <button
-        class="tab"
-        class:active={activeLibraryTab === "Playlists"}
+        class="libTab"
+        class:libTabActive={activeLibraryTab === "Playlists"}
         onclick={(e) => {
           activeLibraryTab = "Playlists";
           scrollTabToStart(e);
@@ -732,8 +741,8 @@
       >
 
       <button
-        class="tab"
-        class:active={activeLibraryTab === "Albums"}
+        class="libTab"
+        class:libTabActive={activeLibraryTab === "Albums"}
         onclick={(e) => {
           activeLibraryTab = "Albums";
           scrollTabToStart(e);
@@ -741,8 +750,8 @@
       >
 
       <button
-        class="tab"
-        class:active={activeLibraryTab === "Songs"}
+        class="libTab"
+        class:libTabActive={activeLibraryTab === "Songs"}
         onclick={(e) => {
           activeLibraryTab = "Songs";
           scrollTabToStart(e);
@@ -750,8 +759,8 @@
       >
 
       <button
-        class="tab"
-        class:active={activeLibraryTab === "Artists"}
+        class="libTab"
+        class:libTabActive={activeLibraryTab === "Artists"}
         onclick={(e) => {
           activeLibraryTab = "Artists";
           scrollTabToStart(e);
@@ -760,28 +769,28 @@
     </div>
 
     {#if activeLibraryTab === "Playlists"}
-      <div class="playlist">
-        <p class="empty-state">No playlists yet.</p>
+      <div class="playlistsPanel">
+        <p class="playlistsEmptyState">No playlists yet.</p>
       </div>
     {:else if activeLibraryTab === "Albums"}
-      <div class="playlist">
-        <p class="empty-state">No albums yet.</p>
+      <div class="albumsPanel">
+        <p class="albumsEmptyState">No albums yet.</p>
       </div>
     {:else if activeLibraryTab === "Songs"}
-      <div class="playlist">
-        <p class="empty-state">No songs yet.</p>
+      <div class="songsPanel">
+        <p class="songsEmptyState">No songs yet.</p>
       </div>
     {:else if activeLibraryTab === "Artists"}
-      <div class="playlist">
-        <p class="empty-state">No artists yet.</p>
+      <div class="artistsPanel">
+        <p class="artistsEmptyState">No artists yet.</p>
       </div>
     {/if}
   </div>
-  <div class="you rim">
-    <div class="accountprev">
-      <div class="profilePicture rim">
+  <div class="acctBar rim">
+    <div class="acctRow">
+      <div class="acctPfpWrap rim">
         <img
-          class="profilePicture"
+          class="acctPfp"
           src={user?.pfpUrl || "/images/plhd.png"}
           alt="Profile picture"
           onclick={() => userprofile(user?.username)}
@@ -789,21 +798,25 @@
         />
       </div>
       <div
-        class="text"
+        class="acctText"
         onclick={() => userprofile(user?.username)}
         style="cursor: pointer;"
       >
-        <h1 class="Name">{user?.displayname ?? "Loading..."}</h1>
-        <p class="subtitle">
+        <h1 class="acctName">{user?.displayname ?? "Loading..."}</h1>
+        <p class="acctSubtitle">
           {user ? `@${user.username}` : ""}
         </p>
       </div>
-      <button class="settings" onclick={() => (showSettings = true)}>
-        <img class="status-icon2" src="/images/settings.png" alt="" /></button
-      >
-      <div class="select rim">
+      <button class="acctSettingsBtn" onclick={() => (showSettings = true)}>
         <img
-          class="status-icon2"
+          class="acctSettingsIcon"
+          src="/images/settings.png"
+          alt=""
+        /></button
+      >
+      <button class="acctStatusSelect">
+        <img
+          class="acctStatusIcon"
           src={statusIcons[user?.status ?? "online"]}
           alt=""
         />
@@ -815,7 +828,7 @@
           <option value="away">Away</option>
           <option value="dnd">Do Not Disturb</option>
         </select>
-      </div>
+      </button>
     </div>
   </div>
 </div>
@@ -824,7 +837,7 @@
   /* ============================================================
      LAYOUT — SIDEBAR SHELL
      ============================================================ */
-  .sidebar {
+  .sidebarShell {
     display: flex;
     flex-direction: column;
     justify-content: start;
@@ -837,9 +850,9 @@
   }
 
   /* ============================================================
-     ACCOUNT PREVIEW ("you" bar at the top)
+     ACCOUNT BAR ("you" bar at the top)
      ============================================================ */
-  .you {
+  .acctBar {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -852,7 +865,7 @@
     width: 100%;
   }
 
-  .accountprev {
+  .acctRow {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -862,7 +875,7 @@
     gap: 10px;
   }
 
-  .accountprev .text:hover ~ .settings {
+  .acctRow .acctText:hover ~ .acctSettingsBtn {
     pointer-events: none;
     opacity: 0 !important;
     width: 0px !important;
@@ -870,63 +883,31 @@
     display: none;
   }
 
-  .settings {
-    font-size: 12px;
-    padding: 10px 10px;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    display: flex;
-    pointer-events: all;
-    opacity: 1 !important;
-  }
-
-  .select {
+  .acctPfpWrap {
     position: relative;
-    font-size: 12px;
-    padding: 10px 10px;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
+  }
+
+  .acctPfp {
+    width: 35px;
+    height: 35px;
+    object-fit: cover;
+    background-color: white;
+  }
+
+  .acctText {
     display: flex;
-    pointer-events: all;
-    opacity: 1 !important;
-    background: linear-gradient(to bottom, #ffffff70, #cecece70);
-  }
-
-  .select select {
-    all: unset;
-    position: absolute;
-    height: 100%;
-    width: 100% !important;
-    opacity: 0;
-    cursor: pointer;
-  }
-
-  .status-icon2 {
-    position: relative;
-    width: 15px;
-    height: 15px;
-    z-index: 20;
-    pointer-events: none;
-  }
-
-  /* ============================================================
-     SHARED TEXT BLOCKS (name / subtitle / hover expansion)
-     used by: account preview, friend rows, search rows
-     ============================================================ */
-  .text {
+    flex-direction: column;
     width: 100%;
     min-width: 0;
     flex: 1;
-    height: 100%;
+    height: auto;
     overflow: hidden;
     position: relative;
     transition: all 1s ease;
     z-index: 1;
   }
 
-  .text:hover {
+  .acctText:hover {
     position: relative;
     width: 100%;
     height: fit-content;
@@ -938,7 +919,7 @@
     z-index: 2;
   }
 
-  .Name {
+  .acctName {
     font-size: 15px;
     font-weight: 500;
     opacity: 0.7;
@@ -948,60 +929,61 @@
     max-width: 100%;
   }
 
-  .subtitle,
-  .friend .Name,
-  .someone .text h1 {
+  .acctSubtitle {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.5;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
   }
 
-  .subtitle {
-    font-size: 13px;
-    font-weight: 400;
-    opacity: 0.5;
+  .acctSettingsBtn {
+    font-size: 12px;
+    padding: 5px 5px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: flex;
+    pointer-events: all;
+    opacity: 1 !important;
   }
 
-  .profilePicture {
+  .acctStatusSelect {
     position: relative;
-    width: 35px;
-    height: 35px;
-    object-fit: cover;
-    background-color: white;
+    font-size: 12px;
+    padding: 5px 5px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: flex;
+    pointer-events: all;
+    opacity: 1 !important;
   }
 
-  /* text variant used inside notification/friend/search rows,
-     where we don't want the hover-expand behavior from .text */
-  .notiftext {
-    background: none !important;
-    padding: 0px !important;
-    width: 100%;
-    min-width: 0;
-    flex: 1;
+  .acctStatusSelect select {
+    all: unset;
+    position: absolute;
     height: 100%;
-    overflow: hidden;
+    width: 100% !important;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .acctSettingsIcon,
+  .acctStatusIcon {
     position: relative;
-    transition: all 1s ease;
-    z-index: 1;
+    width: 20px;
+    height: 20px;
+    z-index: 20;
+    pointer-events: none;
+    filter: drop-shadow(0px 1px 5px #00000070);
   }
 
-  .notiftext:hover {
-    padding: 0px !important;
-    height: 100%;
-    display: block;
-    z-index: 1;
-  }
-
-  .notiftext .Name {
-    text-overflow: clip !important;
-  }
-
-  .text,
-  .notiftext {
-    height: auto;
-  }
-
+  /* ============================================================
+     PING/PONG TOAST BUBBLES
+     ============================================================ */
   .bubbleStack {
     position: absolute;
     display: flex;
@@ -1080,7 +1062,7 @@
     }
   }
 
-  .bubble {
+  .bubbleCard {
     display: flex;
     flex-direction: column;
     gap: 5px;
@@ -1090,7 +1072,7 @@
     background: linear-gradient(to bottom, #ffffff, #eeeeee);
   }
 
-  .bubble p {
+  .bubbleCard p {
     z-index: 21;
   }
 
@@ -1105,13 +1087,49 @@
     background: linear-gradient(to bottom, #ffffff, #eeeeee);
   }
 
-  .bubbleProfile {
+  .bubbleProfileRow {
     display: flex;
     flex-direction: row;
     gap: 5px;
   }
 
-  .bubble-dismiss {
+  .bubblePfpWrap {
+    position: relative;
+  }
+
+  .bubblePfp {
+    width: 35px;
+    height: 35px;
+    object-fit: cover;
+    background-color: white;
+  }
+
+  .bubbleText {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bubbleName {
+    font-size: 15px;
+    font-weight: 500;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .bubbleSubtitle {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .bubbleDismissBtn {
     position: absolute;
     top: 6px;
     right: 6px;
@@ -1128,7 +1146,7 @@
     z-index: 2;
   }
 
-  .bubble-dismiss:hover {
+  .bubbleDismissBtn:hover {
     opacity: 0.8;
     background: #00000010;
   }
@@ -1160,10 +1178,9 @@
   }
 
   /* ============================================================
-     TABS (top-level: Library/Friends/Notification/Find,
-            bottom-level: Playlists/Albums/Songs/Artists)
+     TOP TAB SWITCHER (Friends/Notification/Find)
      ============================================================ */
-  .tabview {
+  .topTabView {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -1175,7 +1192,7 @@
     width: 100%;
   }
 
-  .tabswitch {
+  .topTabSwitch {
     display: flex;
     flex-direction: row;
     justify-content: start;
@@ -1188,7 +1205,7 @@
     scrollbar-width: none;
   }
 
-  .tab {
+  .topTab {
     all: unset;
     display: flex;
     flex-direction: row;
@@ -1204,26 +1221,15 @@
     scroll-margin-inline: 20px;
   }
 
-  .tab.active {
+  .topTabActive {
     opacity: 0.7;
   }
 
-  .tab::after {
-    all: unset;
+  .topTabUnread {
+    color: #e33 !important;
   }
 
-  .tab::before {
-    all: unset;
-  }
-
-  .tabcontent {
-    width: 100%;
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  /* small red dot on a tab label (e.g. "Notification") when it has unread items */
-  .unread-dot {
+  .topTabUnreadDot {
     display: inline-block;
     width: 6px;
     height: 6px;
@@ -1233,19 +1239,10 @@
     vertical-align: middle;
   }
 
-  .status-icon {
-    position: absolute;
-    bottom: -4px;
-    right: -6px;
-    width: 15px;
-    height: 15px;
-    z-index: 20;
-  }
-
   /* ============================================================
      FRIENDS TAB
      ============================================================ */
-  .friends {
+  .friendsList {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -1255,7 +1252,7 @@
     overflow-y: auto;
   }
 
-  .friend {
+  .friendRow {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -1271,22 +1268,89 @@
     transition: background 0.15s ease;
   }
 
-  .friend:hover {
+  .friendRow:hover {
     background: #00000010;
   }
 
-  .friend .Name {
-    font-size: 14px;
+  .friendPfpWrap {
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    width: 35px;
+    height: 35px;
   }
 
-  .friend .subtitle {
+  .friendPfp {
+    width: 35px;
+    height: 35px;
+    object-fit: cover;
+    background-color: white;
+  }
+
+  .friendStatusIcon {
+    position: absolute;
+    bottom: -4px;
+    right: -6px;
+    width: 15px;
+    height: 15px;
+    z-index: 20;
+  }
+
+  .friendText {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .friendName {
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .friendSubtitle {
     font-size: 11px;
+    font-weight: 400;
+    opacity: 0.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .friendsFade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 60px;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to top, black, transparent);
+    mask-image: linear-gradient(to top, black, transparent);
+    -webkit-backdrop-filter: blur(50px);
+    backdrop-filter: blur(50px);
+    filter: saturate(3) brightness(1.5);
+    z-index: 20;
+  }
+
+  .friendsEmptyState {
+    font-size: 12px;
+    opacity: 0.4;
+    padding: 10px;
+    text-align: center;
   }
 
   /* ============================================================
-     SEARCH TAB
+     SEARCH / FIND TAB
      ============================================================ */
-  .searchtab {
+  .searchPanel {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -1297,18 +1361,18 @@
     background: white;
   }
 
-  .searchinput {
+  .searchInputWrap {
     width: 100%;
     padding-inline: 20px;
     background: none !important;
   }
 
-  .searchinput input {
+  .searchInputWrap input {
     all: unset;
     width: 100%;
   }
 
-  .searchresults {
+  .searchResultsList {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -1317,8 +1381,7 @@
     flex: 1;
   }
 
-  /* result card: optional banner image stacked above the profile row */
-  .stackV {
+  .searchResultCard {
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1327,14 +1390,14 @@
     background: white;
   }
 
-  .profileBanner {
+  .searchBanner {
     margin-inline: 20px;
     margin-block: -20px;
     height: 40px !important;
     object-fit: cover;
   }
 
-  .someone {
+  .searchRow {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -1346,18 +1409,43 @@
     height: fit-content;
   }
 
-  .someone .profilePicture {
+  .searchPfpWrap {
+    position: relative;
+  }
+
+  .searchPfp {
+    width: 35px;
+    height: 35px;
     object-fit: cover;
     outline: 3px solid white;
     background-color: #efefef;
   }
 
-  .someone .text {
+  .searchStatusIcon {
+    position: absolute;
+    bottom: -4px;
+    right: -6px;
+    width: 15px;
+    height: 15px;
+    z-index: 20;
+  }
+
+  .searchText {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
     font-size: 15px;
   }
 
-  .someone .text h1,
-  .someone .text p {
+  .searchName,
+  .searchSubtitle {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     text-shadow:
       0px 0px 5px rgb(255, 255, 255),
       0px 0px 5px rgb(255, 255, 255),
@@ -1369,11 +1457,41 @@
     opacity: 1 !important;
   }
 
+  .searchName {
+    font-weight: 500;
+  }
+
+  .searchSubtitle {
+    font-weight: 400;
+  }
+
+  .searchFade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 60px;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to top, black, transparent);
+    mask-image: linear-gradient(to top, black, transparent);
+    -webkit-backdrop-filter: blur(50px);
+    backdrop-filter: blur(50px);
+    filter: saturate(3) brightness(1.5);
+    z-index: 20;
+  }
+
+  .searchEmptyState {
+    font-size: 12px;
+    opacity: 0.4;
+    padding: 10px;
+    text-align: center;
+  }
+
   /* ============================================================
-     FEED TAB (notifications)
+     NOTIFICATION TAB
      ============================================================ */
-  .feed {
-    position: relative; /* anchor for the fade footer */
+  .notifPanel {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -1383,17 +1501,17 @@
     overflow-y: auto;
   }
 
-  .list {
+  .notifList {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
     gap: 0px;
-    padding: 1px 0px 60px 0px; /* bottom padding matches fade height so last card isn't hidden behind it */
+    padding: 1px 0px 60px 0px;
     overflow-y: auto;
   }
 
-  .clear-all-fade {
+  .notifFade {
     position: absolute;
     left: 0;
     right: 0;
@@ -1409,12 +1527,12 @@
     -webkit-backdrop-filter: blur(50px);
     backdrop-filter: blur(50px);
     filter: saturate(3) brightness(1.5);
-    pointer-events: none; /* let scroll/clicks pass through the empty area */
+    pointer-events: none;
     z-index: 20;
   }
 
-  .clear-all {
-    pointer-events: all; /* ...except the button itself */
+  .notifClearAllBtn {
+    pointer-events: all;
     font-size: 12px;
     opacity: 0.7;
     padding: 4px 8px;
@@ -1422,11 +1540,11 @@
     transition: opacity 0.15s ease;
   }
 
-  .clear-all:hover {
+  .notifClearAllBtn:hover {
     opacity: 1;
   }
 
-  .notification {
+  .notifCard {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -1438,24 +1556,24 @@
     z-index: 1;
   }
 
-  .notifBody {
+  .notifCard:hover {
+    background: #00000010;
+  }
+
+  .notifCardUnread {
+    background: linear-gradient(to bottom, #fff9f0, #fef3e2);
+  }
+
+  .notifCardUnread:hover {
+    background: #f5e6cc;
+  }
+
+  .notifCardBody {
     overflow: hidden;
     border-radius: inherit;
   }
 
-  .notification:hover {
-    background: #00000010;
-  }
-
-  .notification.unread {
-    background: linear-gradient(to bottom, #fff9f0, #fef3e2);
-  }
-
-  .notification.unread:hover {
-    background: #f5e6cc;
-  }
-
-  .dismiss-btn {
+  .notifDismissBtn {
     position: absolute;
     top: 8px;
     right: 8px;
@@ -1472,12 +1590,12 @@
     z-index: 2;
   }
 
-  .dismiss-btn:hover {
+  .notifDismissBtn:hover {
     opacity: 0.8;
     background: #00000010;
   }
 
-  .stackH {
+  .notifRow {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -1486,22 +1604,16 @@
     gap: 10px;
   }
 
-  .notification_image,
-  .altuser_image {
+  .notifTypeIconWrap {
     display: flex;
     flex-direction: column;
     padding: 0;
-    position: relative;
-    height: fit-content;
-    flex-shrink: 0;
-  }
-
-  .notification_image {
-    height: 50px;
-    width: 50px;
     position: absolute;
     top: -7px;
     right: -7px;
+    height: 50px;
+    width: 50px;
+    flex-shrink: 0;
     mask-image: linear-gradient(
       to bottom,
       black 0%,
@@ -1510,21 +1622,66 @@
     );
   }
 
-  .notification_image img {
+  .notifTypeIcon {
     height: 50px;
     width: 50px;
     background: none;
   }
 
-  /* per-notification unread indicator, sits at the end of the row */
-  .stackH .unread-dot {
+  .notifActorPfpWrap {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: relative;
+    height: fit-content;
+    flex-shrink: 0;
+  }
+
+  .notifActorPfp {
+    width: 35px;
+    height: 35px;
+    object-fit: cover;
+    background-color: white;
+  }
+
+  .notifText {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .notifTitle {
+    font-size: 15px;
+    font-weight: 500;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    max-width: 100%;
+  }
+
+  .notifSubtitle {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .notifRowUnreadDot {
     flex-shrink: 0;
     width: 8px;
     height: 8px;
+    border-radius: 50%;
+    background: #e33;
     margin-left: auto;
   }
 
-  .notifActions {
+  .notifActionsRow {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -1535,7 +1692,7 @@
     box-sizing: border-box;
   }
 
-  .notifActions button {
+  .notifActionsRow button {
     flex: 1 1 0;
     min-width: 0;
     font-size: 13px;
@@ -1549,37 +1706,91 @@
     text-align: center;
   }
 
-  .notifActions button:first-child {
+  .notifActionsRow button:first-child {
     background: #2b6cb0;
     color: white;
   }
 
-  .notifActions button:last-child {
+  .notifActionsRow button:last-child {
     background: #00000010;
     color: #000;
   }
 
-  .notifActions button:hover {
+  .notifActionsRow button:hover {
     opacity: 0.85;
   }
 
-  .unreadTab {
-    color: #e33 !important;
+  .notifEmptyState {
+    font-size: 12px;
+    opacity: 0.4;
+    padding: 10px;
+    text-align: center;
   }
 
   /* ============================================================
-     LIBRARY TAB (Playlists/Albums/Songs/Artists)
+     LIBRARY TAB SWITCHER (Playlists/Albums/Songs/Artists)
      ============================================================ */
-  .playlist {
+  .libTabView {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    align-items: center;
+    background: linear-gradient(to bottom, #ffffff70, #eeeeee70);
+    gap: 0px;
+    height: 45.8% !important;
+    width: 100%;
+  }
+
+  .libTabSwitch {
+    display: flex;
+    flex-direction: row;
+    justify-content: start;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 80px !important;
+    padding: 20px 20px 10px 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .libTab {
+    all: unset;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: fit-content;
+    font-family: "InterVariable", sans-serif !important;
+    font-size: 24px;
+    font-weight: 300;
+    opacity: 0.2;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+    scroll-margin-inline: 20px;
+  }
+
+  .libTabActive {
+    opacity: 0.7;
+  }
+
+  /* ============================================================
+     LIBRARY PANELS
+     ============================================================ */
+  .playlistsPanel,
+  .albumsPanel,
+  .songsPanel,
+  .artistsPanel {
     width: 100%;
     flex: 1;
     overflow-y: auto;
   }
 
-  /* ============================================================
-     SHARED — empty/loading states across all tabs
-     ============================================================ */
-  .empty-state {
+  .playlistsEmptyState,
+  .albumsEmptyState,
+  .songsEmptyState,
+  .artistsEmptyState {
     font-size: 12px;
     opacity: 0.4;
     padding: 10px;

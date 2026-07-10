@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { presence } from "$lib/stores/presence";
   import PingModal from "$lib/components/PingModal.svelte";
+  import { goto } from "$app/navigation";
 
   let showPingModal = $state(false);
 
@@ -234,7 +235,9 @@
       style="background-image: {data.user.bannerUrl
         ? `url(${data.user.bannerUrl})`
         : 'none'}; object-fit: cover;"
-    ></div>
+    >
+        <button class="backBtn" onclick={() => goto("/app")}> ← Back to Library </button>
+    </div>
     <div class="profileheader">
       <div class="pfpwrap">
         <img
@@ -327,6 +330,12 @@
     padding: 0 2rem;
     margin-top: -40px;
     flex-wrap: wrap;
+  }
+
+  .backBtn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
   }
 
   .pfp {

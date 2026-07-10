@@ -1,76 +1,171 @@
-// src/lib/stores/player.js
 import { writable } from 'svelte/store';
 
 function createPlayerStore() {
-    const { subscribe, update } = writable({
-        videoId: null,
-        title: '',
-        artist: '',
-        albumArt: '/images/plhd.png',
-        isPlaying: false,
-        currentTime: 0,
-        duration: 0,
-        ready: false,
+  const { subscribe, update } = writable({
+    songId: null,
+    title: '',
+    artist: '',
+    albumArt: '/images/plhd.png',
+    isPlaying: false,
+    currentTime: 0,
+    duration: 0,
+    ready: false,
+  });
+
+  let audioEl = null;
+  let currentObjectUrl = null;
+  let queue = [];
+  let queueIndex = -1;
+
+  function setMediaSessionMetadata(meta) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: meta.title || 'Unknown title',
+      artist: meta.artist || 'Unknown artist',
+      album: meta.album || '',
+      artwork: [
+        { src: meta.albumArt || '/images/plhd.png', sizes: '512x512', type: 'image/png' },
+      ],
     });
+  }
 
-    let ytPlayer = null;
+  function setMediaSessionState(isPlaying) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }
 
-    function attachPlayer(instance) {
-        ytPlayer = instance;
-        update((s) => ({ ...s, ready: true }));
+  function attachPlayer(instance) {
+    audioEl = instance;
+    update((s) => ({ ...s, ready: true }));
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => play());
+      navigator.mediaSession.setActionHandler('pause', () => pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
+      navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime != null && audioEl) {
+          audioEl.currentTime = details.seekTime;
+        }
+      });
+    }
+  }
+
+  function detachPlayer() {
+    if (currentObjectUrl) {
+      URL.revokeObjectURL(currentObjectUrl);
+      currentObjectUrl = null;
+    }
+    audioEl = null;
+    update((s) => ({ ...s, ready: false }));
+  }
+
+  // `song` can be a File, or a FileSystemFileHandle (has .getFile()) —
+  // matches what scanLibrary()/importSong() hand back for Songs/ entries.
+  async function loadSong(song, meta = {}) {
+    if (!audioEl) return;
+    audioEl.pause();
+
+    let file = song;
+    if (song?.getFile) {
+      file = await song.getFile();
     }
 
-    function detachPlayer() {
-        ytPlayer = null;
-        update((s) => ({ ...s, ready: false }));
+    if (currentObjectUrl) {
+      URL.revokeObjectURL(currentObjectUrl);
+      currentObjectUrl = null;
     }
 
-    function loadVideo(videoId, meta = {}) {
-        if (!ytPlayer) return;
+    const url = URL.createObjectURL(file);
+    currentObjectUrl = url;
 
-        // stop whatever's currently playing before swapping tracks
-        ytPlayer.stopVideo();
+    update((s) => ({
+      ...s,
+      songId: meta.songId ?? null,
+      title: meta.title ?? '',
+      artist: meta.artist ?? '',
+      albumArt: meta.albumArt ?? '/images/plhd.png',
+      currentTime: 0,
+      duration: 0,
+      isPlaying: false,
+    }));
 
-        update((s) => ({
-            ...s,
-            videoId,
-            title: meta.title ?? '',
-            artist: meta.artist ?? '',
-            albumArt: meta.albumArt ?? '/images/plhd.png',
-            currentTime: 0,
-            duration: 0,
-            isPlaying: false,
-        }));
+    audioEl.src = url;
+    setMediaSessionMetadata(meta);
+    audioEl.play().catch(() => {
+      // autoplay can be blocked without a user gesture — isPlaying
+      // stays false and the play button just shows "play" as normal
+    });
+  }
 
-        ytPlayer.loadVideoById(videoId); // autoplays by default once cued
+  // items: [{ song, meta }, ...]. Loads items[startIndex] and remembers the
+  // rest so playNext()/playPrevious() (and the OS media-key handlers) work.
+  function loadQueue(items, startIndex = 0) {
+    queue = items;
+    queueIndex = startIndex;
+    const current = queue[queueIndex];
+    if (current) loadSong(current.song, current.meta);
+  }
+
+  function playNext() {
+    if (queueIndex + 1 < queue.length) {
+      queueIndex += 1;
+      loadSong(queue[queueIndex].song, queue[queueIndex].meta);
     }
+  }
 
-    function play() {
-        ytPlayer?.playVideo();
+  function playPrevious() {
+    if (queueIndex > 0) {
+      queueIndex -= 1;
+      loadSong(queue[queueIndex].song, queue[queueIndex].meta);
     }
+  }
 
-    function pause() {
-        ytPlayer?.pauseVideo();
+  function play() {
+    audioEl?.play().catch(() => {});
+  }
+
+  function pause() {
+    audioEl?.pause();
+  }
+
+  function seek(fraction) {
+    update((s) => {
+      if (audioEl && s.duration > 0) {
+        audioEl.currentTime = s.duration * fraction;
+      }
+      return s;
+    });
+  }
+
+  function setPlaying(isPlaying) {
+    update((s) => ({ ...s, isPlaying }));
+    setMediaSessionState(isPlaying);
+  }
+
+  function setTime(currentTime, duration) {
+    update((s) => ({ ...s, currentTime, duration }));
+    if ('mediaSession' in navigator && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({ duration, position: currentTime, playbackRate: 1 });
+      } catch {}
     }
+  }
 
-    function seek(fraction) {
-        update((s) => {
-            if (ytPlayer && s.duration > 0) {
-                ytPlayer.seekTo(s.duration * fraction, true);
-            }
-            return s;
-        });
-    }
-
-    function setPlaying(isPlaying) {
-        update((s) => ({ ...s, isPlaying }));
-    }
-
-    function setTime(currentTime, duration) {
-        update((s) => ({ ...s, currentTime, duration }));
-    }
-
-    return { subscribe, attachPlayer, detachPlayer, loadVideo, play, pause, seek, setPlaying, setTime };
+  return {
+    subscribe,
+    attachPlayer,
+    detachPlayer,
+    loadSong,
+    loadQueue,
+    playNext,
+    playPrevious,
+    play,
+    pause,
+    seek,
+    setPlaying,
+    setTime,
+  };
 }
 
 export const player = createPlayerStore();

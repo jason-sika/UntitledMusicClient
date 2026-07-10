@@ -1,5 +1,7 @@
 <script>
   import { goto } from "$app/navigation";
+  import ImageCropper from "$lib/components/ImageCropper.svelte";
+
   let {
     onClose,
     currentDisplayname = "",
@@ -11,7 +13,6 @@
   let error = $state("");
   let success = $state("");
   let loading = $state(false);
-  let currentPage = $state("AccountSettings");
   let pfpInput = $state(null);
   let bannerInput = $state(null);
   let uploadingPfp = $state(false);
@@ -20,6 +21,9 @@
   let bannerUrl = $state(user?.bannerUrl);
   let pfpStatus = $state("");
   let bannerStatus = $state("");
+
+  let cropTarget = $state(null); // "pfp" | "banner" | null
+  let cropFile = $state(null);
 
   async function preResizeIfStatic(file) {
     const isAnimated = file.type === "image/gif" || file.type === "image/webp";
@@ -42,13 +46,7 @@
     return new File([blob], file.name, { type: "image/webp" });
   }
 
-  async function handleUpload(
-    file,
-    endpoint,
-    onSuccess,
-    setUploading,
-    setStatus,
-  ) {
+  async function handleUpload(file, endpoint, onSuccess, setUploading, setStatus) {
     if (!file) return;
     error = "";
     setUploading(true);
@@ -57,7 +55,7 @@
     setStatus("Uploading...");
 
     try {
-      const prepared = await preResizeIfStatic(file);
+      const prepared = isAnimated ? file : await preResizeIfStatic(file);
       const formData = new FormData();
       formData.append("file", prepared);
 
@@ -84,7 +82,7 @@
   }
 
   async function pollJobStatus(jobId, onSuccess, setUploading, setStatus) {
-    const maxAttempts = 60; // ~2 minutes at 2s intervals
+    const maxAttempts = 60;
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((r) => setTimeout(r, 2000));
 
@@ -107,8 +105,6 @@
           setStatus("");
           return;
         }
-        // still "processing" — nudge the message a little past ~20s so a long
-        // wait doesn't look stuck, without needing real progress from the server
         if (i === 10) {
           setStatus("Still working on it...");
         }
@@ -123,23 +119,39 @@
   }
 
   function handlePfpChange(e) {
-    handleUpload(
-      e.target.files[0],
-      "pfp",
-      (url) => (pfpUrl = url),
-      (val) => (uploadingPfp = val),
-      (msg) => (pfpStatus = msg),
-    );
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    // animated gifs/webp skip cropping — they go straight through as before
+    if (file.type === "image/gif" || file.type === "image/webp") {
+      handleUpload(file, "pfp", (url) => (pfpUrl = url), (v) => (uploadingPfp = v), (m) => (pfpStatus = m));
+      return;
+    }
+    cropTarget = "pfp";
+    cropFile = file;
   }
 
   function handleBannerChange(e) {
-    handleUpload(
-      e.target.files[0],
-      "banner",
-      (url) => (bannerUrl = url),
-      (val) => (uploadingBanner = val),
-      (msg) => (bannerStatus = msg),
-    );
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.type === "image/gif" || file.type === "image/webp") {
+      handleUpload(file, "banner", (url) => (bannerUrl = url), (v) => (uploadingBanner = v), (m) => (bannerStatus = m));
+      return;
+    }
+    cropTarget = "banner";
+    cropFile = file;
+  }
+
+  function onCropped(croppedFile) {
+    const target = cropTarget;
+    cropTarget = null;
+    cropFile = null;
+    if (target === "pfp") {
+      handleUpload(croppedFile, "pfp", (url) => (pfpUrl = url), (v) => (uploadingPfp = v), (m) => (pfpStatus = m));
+    } else if (target === "banner") {
+      handleUpload(croppedFile, "banner", (url) => (bannerUrl = url), (v) => (uploadingBanner = v), (m) => (bannerStatus = m));
+    }
   }
 
   function formatUsername(e) {
@@ -291,6 +303,16 @@
     >Delete Account -></button
   >
 </div>
+
+{#if cropTarget}
+  <ImageCropper
+    file={cropFile}
+    aspect={cropTarget === "banner" ? 16 / 5 : 1}
+    outputWidth={cropTarget === "banner" ? 1600 : 800}
+    onCancel={() => { cropTarget = null; cropFile = null; }}
+    {onCropped}
+  />
+{/if}
 
 <style>
   .pageS {

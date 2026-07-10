@@ -1,17 +1,14 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import { player } from "$lib/stores/player";
+  import { librarySongs } from "$lib/stores/library";
 
-  let playerHost = $state(null);
-  let ytPlayer;
-  let pollInterval;
+  let audioEl = $state(null);
 
   let barWrap = $state(null);
   let dragging = $state(false);
   let dragProgress = $state(0);
-  let query = $state("");
-  let searchResults = $state([]);
-  let searching = $state(false);
+
 
   const progress = $derived(
     dragging
@@ -57,13 +54,56 @@
     else player.play();
   }
 
+  function previewSong(song) {
+    player.loadSong(song.handle, {
+      songId: song.id,
+      title: song.title,
+      artist: song.artist,
+      albumArt: "/images/plhd.png", // swap for album artwork lookup once wired
+    });
+  }
+
+  // ---------- local <audio> element wiring ----------
+
+  function handleTimeUpdate() {
+    player.setTime(audioEl.currentTime, audioEl.duration || 0);
+  }
+
+  function handleLoadedMetadata() {
+    player.setTime(audioEl.currentTime, audioEl.duration || 0);
+  }
+
+  function handlePlay() {
+    player.setPlaying(true);
+  }
+
+  function handlePause() {
+    player.setPlaying(false);
+  }
+
+  function handleEnded() {
+    player.setPlaying(false);
+  }
+
+  onMount(() => {
+    player.attachPlayer(audioEl);
+  });
+
   onDestroy(() => {
-    clearInterval(pollInterval);
     player.detachPlayer();
   });
 </script>
 
-<div bind:this={playerHost} style="display:none;"></div>
+<audio
+  bind:this={audioEl}
+  ontimeupdate={handleTimeUpdate}
+  onloadedmetadata={handleLoadedMetadata}
+  onplay={handlePlay}
+  onpause={handlePause}
+  onended={handleEnded}
+  style="display:none;"
+></audio>
+
 <div class="player rim">
   <div class="meta">
     <img class="albumArt rim" src={$player.albumArt} alt="Album Art" />
@@ -124,7 +164,7 @@
     padding-inline: 20px;
     height: 80px;
     width: 100%;
-    background: linear-gradient(to bottom, #ffffff70, #cecece70);
+    background: linear-gradient(to bottom, #ffffff, #bababa);
     color: #000000;
     z-index: 10;
   }
@@ -144,10 +184,30 @@
     height: 50px;
     transform: rotate(-05deg);
     box-shadow: 0px 0px 8px #00000070;
+    transition: all 0.5s ease;
+    z-index: 50;
+  }
+
+  .albumArt:hover {
+    transform: rotate(0deg) scale(2) translateX(10px) translateY(-15px);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    box-shadow: 0px 0px 8px #00000070;
+  }
+
+  .albumArt:active {
+    width: 50px;
+    height: 50px;
+    transform: rotate(-05deg);
+    box-shadow: 0px 0px 8px #00000070;
+    transition: all 0.5s ease;
+    z-index: 50;
   }
 
   .text {
     width: 100%;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     overflow: hidden;
   }
@@ -172,9 +232,6 @@
     opacity: 0.5;
   }
 
-  /* ============================================================
-     TRACKER — progress bar
-     ============================================================ */
   .tracker {
     position: relative;
     display: flex;
@@ -240,16 +297,13 @@
     mix-blend-mode: plus-lighter;
   }
 
-  /* ============================================================
-     CONTROLS
-     ============================================================ */
   .controls {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-    position: relative; /* anchor point for the dropdown */
+    position: relative;
     text-align: center;
   }
 
