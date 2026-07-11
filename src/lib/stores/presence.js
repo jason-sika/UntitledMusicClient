@@ -1,8 +1,10 @@
 import { writable } from 'svelte/store';
 import { notifications } from './notifications.js';
+import { feed } from './feed.js';
 
 function createPresenceStore() {
     const { subscribe, update, set } = writable({});
+    const { subscribe: subscribeNowPlaying, update: updateNowPlaying, set: setNowPlaying } = writable({});
     let eventSource = null;
     let visibilityHandler = null;
     let exitHandler = null;
@@ -106,12 +108,23 @@ function createPresenceStore() {
             switch (data.type) {
                 case 'init': {
                     const statuses = {};
-                    data.statuses.forEach((s) => (statuses[s.userId] = s.status));
+                    const tracks = {};
+                    data.statuses.forEach((s) => {
+                        statuses[s.userId] = s.status;
+                        tracks[s.userId] = s.track;
+                    });
                     update((current) => ({ ...current, ...statuses }));
+                    updateNowPlaying((current) => ({ ...current, ...tracks }));
                     break;
                 }
                 case 'status':
                     update((current) => ({ ...current, [data.userId]: data.status }));
+                    break;
+                case 'listening':
+                    updateNowPlaying((current) => ({
+                        ...current,
+                        [data.userId]: data.track ?? null,
+                    }));
                     break;
                 case 'notification:new':
                     notifications.add(data.notification);
@@ -124,6 +137,12 @@ function createPresenceStore() {
                     break;
                 case 'notifications:cleared':
                     notifications.clear();
+                    break;
+                case 'feed:item':
+                    feed.add(data.item);
+                    break;
+                case 'feed:removed':
+                    feed.remove(data.id);
                     break;
             }
         };
@@ -161,6 +180,7 @@ function createPresenceStore() {
             heartbeat = null;
         }
         set({});
+        setNowPlaying({});
     }
 
     async function setStatus(status) {
@@ -198,7 +218,15 @@ function createPresenceStore() {
         }).catch(() => { });
     }
 
-    return { subscribe, connect, disconnect, setStatus, watch, unwatch };
+    return {
+        subscribe,
+        connect,
+        disconnect,
+        setStatus,
+        watch,
+        unwatch,
+        nowPlaying: { subscribe: subscribeNowPlaying },
+    };
 }
 
 export const presence = createPresenceStore();

@@ -2,6 +2,8 @@
   import { page } from "$app/stores";
   import { setContext } from "svelte";
   import Player from "$lib/components/Player.svelte";
+  import { onMount } from "svelte";
+  import { player } from "$lib/stores/player";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
   import "../app.css";
@@ -19,7 +21,14 @@
   let showFlowbox = $derived(
     !EXEMPT_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix)),
   );
-  let hiddenPaths = ["/", "/auth", "/friends", "/register", "/login", "/app/nowplaying"];
+  let hiddenPaths = [
+    "/",
+    "/auth",
+    "/friends",
+    "/register",
+    "/login",
+    "/app/nowplaying",
+  ];
   let showAppComponents = $derived(!hiddenPaths.includes($page.url.pathname));
 
   // --- Local folder gate, scoped to /app and anything under it ---
@@ -105,7 +114,8 @@
         if (perm === "granted") {
           gateStatus = "granted";
         } else {
-          pickerError = "Permission denied. Try again or pick a different folder.";
+          pickerError =
+            "Permission denied. Try again or pick a different folder.";
         }
       } else {
         const handle = await pickLibraryFolder();
@@ -139,6 +149,20 @@
   let blockingGate = $derived(
     inAppSection && gateStatus !== "granted" && gateStatus !== "idle",
   );
+
+  onMount(async () => {
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const user = await res.json();
+        player.setDiscordEnabled(user?.shareListenActivity ?? true);
+      }
+    } catch {
+      // not logged in yet, or offline — leave Discord sharing off until we know otherwise
+    }
+  });
 </script>
 
 <div class="website">
@@ -201,20 +225,20 @@
 </div>
 
 <style>
-    .website {
-      display: flex;
-      flex-direction: column;
-      height: 100dvh !important;
-    }
+  .website {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh !important;
+  }
 
-    .appview {
-      display: flex;
-      flex-direction: row;
-      flex: 1 1 0;      /* grow/shrink to fill remaining space after Player */
-      min-height: 0;    /* the actual fix — overrides the default auto min-height */
-      overflow: hidden;  /* or auto, depending on whether appview itself should scroll */
-      width: 100% !important;
-    }
+  .appview {
+    display: flex;
+    flex-direction: row;
+    flex: 1 1 0; /* grow/shrink to fill remaining space after Player */
+    min-height: 0; /* the actual fix — overrides the default auto min-height */
+    overflow: hidden; /* or auto, depending on whether appview itself should scroll */
+    width: 100% !important;
+  }
 
   .flowbox {
     display: none;

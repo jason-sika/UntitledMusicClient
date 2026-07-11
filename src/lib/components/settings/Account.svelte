@@ -1,6 +1,14 @@
 <script>
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import ImageCropper from "$lib/components/ImageCropper.svelte";
+  import {
+    getDiscordStatus,
+    linkDiscord,
+    linkDiscordFullPage,
+    unlinkDiscord,
+  } from "$lib/discord.js";
+  import { player } from "$lib/stores/player.js";
 
   let {
     onClose,
@@ -25,6 +33,133 @@
   let cropTarget = $state(null); // "pfp" | "banner" | null
   let cropFile = $state(null);
 
+  // --- Discord connection ---
+  let discordLinked = $state(false);
+  let discordId = $state("");
+  let discordBusy = $state(false);
+  let discordError = $state("");
+
+  // --- Privacy: share listening activity (gates both the Discord presence
+  // updates and, per your schema, presumably the activity feed too) ---
+  let shareListenActivity = $state(user?.shareListenActivity ?? true);
+  let shareSaving = $state(false);
+
+  let feedDisplayPrefs = $state({
+    showFeedImports: user?.showFeedImports ?? true,
+    showFeedListening: user?.showFeedListening ?? true,
+    showFeedLikes: user?.showFeedLikes ?? true,
+    showFeedPresence: user?.showFeedPresence ?? true,
+  });
+  let feedPrefSaving = $state({});
+
+  const feedToggleConfig = [
+    { key: "showFeedImports", label: "Song imports" },
+    { key: "showFeedListening", label: "Currently listening updates" },
+    { key: "showFeedLikes", label: "Song likes (pings/pongs)" },
+    { key: "showFeedPresence", label: "Online / away / DND changes" },
+  ];
+
+  async function handleFeedPrefToggle(key, e) {
+    const next = e.target.checked;
+    const prev = feedDisplayPrefs[key];
+    feedDisplayPrefs = { ...feedDisplayPrefs, [key]: next };
+    feedPrefSaving = { ...feedPrefSaving, [key]: true };
+
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ [key]: next }),
+      });
+      if (!res.ok) {
+        feedDisplayPrefs = { ...feedDisplayPrefs, [key]: prev };
+      }
+    } catch {
+      feedDisplayPrefs = { ...feedDisplayPrefs, [key]: prev };
+    } finally {
+      feedPrefSaving = { ...feedPrefSaving, [key]: false };
+    }
+  }
+
+  onMount(async () => {
+    // Reflect the user's saved preference into the player store immediately,
+    // so it doesn't start pushing presence updates before we know whether
+    // that's actually wanted.
+    player.setDiscordEnabled(shareListenActivity);
+
+    const status = await getDiscordStatus();
+    discordLinked = status.linked;
+    discordId = status.discordUserId ?? "";
+  });
+
+  async function handleDiscordConnect() {
+    discordError = "";
+    discordBusy = true;
+
+    const opened = await linkDiscord();
+    if (!opened) {
+      // Popup blocked — fall back to taking over the tab. This does leave
+      // the settings modal, but it's the only option once the browser has
+      // refused the popup.
+      discordBusy = false;
+      linkDiscordFullPage();
+      return;
+    }
+
+    // Popup closed (either the user finished the flow and the callback
+    // page auto-closed it, or they closed it manually mid-flow) — either
+    // way, re-check actual status rather than assuming success.
+    const status = await getDiscordStatus();
+    discordLinked = status.linked;
+    discordId = status.discordUserId ?? "";
+    discordBusy = false;
+
+    if (!discordLinked) {
+      discordError = "Discord wasn't connected. Try again.";
+    }
+  }
+
+  async function handleDiscordDisconnect() {
+    discordError = "";
+    discordBusy = true;
+    const ok = await unlinkDiscord();
+    discordBusy = false;
+    if (!ok) {
+      discordError = "Could not disconnect Discord. Try again.";
+      return;
+    }
+    discordLinked = false;
+    discordId = "";
+  }
+
+  async function handleShareToggle(e) {
+    const next = e.target.checked;
+    shareListenActivity = next;
+    player.setDiscordEnabled(next);
+
+    shareSaving = true;
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ shareListenActivity: next }),
+      });
+      if (!res.ok) {
+        // Revert the toggle if the save failed, so the UI doesn't lie
+        // about what's actually persisted server-side.
+        shareListenActivity = !next;
+        player.setDiscordEnabled(!next);
+      }
+    } catch {
+      shareListenActivity = !next;
+      player.setDiscordEnabled(!next);
+    } finally {
+      shareSaving = false;
+    }
+  }
+
   async function preResizeIfStatic(file) {
     const isAnimated = file.type === "image/gif" || file.type === "image/webp";
     if (isAnimated) return file;
@@ -46,7 +181,13 @@
     return new File([blob], file.name, { type: "image/webp" });
   }
 
-  async function handleUpload(file, endpoint, onSuccess, setUploading, setStatus) {
+  async function handleUpload(
+    file,
+    endpoint,
+    onSuccess,
+    setUploading,
+    setStatus,
+  ) {
     if (!file) return;
     error = "";
     setUploading(true);
@@ -124,7 +265,13 @@
     if (!file) return;
     // animated gifs/webp skip cropping — they go straight through as before
     if (file.type === "image/gif" || file.type === "image/webp") {
-      handleUpload(file, "pfp", (url) => (pfpUrl = url), (v) => (uploadingPfp = v), (m) => (pfpStatus = m));
+      handleUpload(
+        file,
+        "pfp",
+        (url) => (pfpUrl = url),
+        (v) => (uploadingPfp = v),
+        (m) => (pfpStatus = m),
+      );
       return;
     }
     cropTarget = "pfp";
@@ -136,7 +283,13 @@
     e.target.value = "";
     if (!file) return;
     if (file.type === "image/gif" || file.type === "image/webp") {
-      handleUpload(file, "banner", (url) => (bannerUrl = url), (v) => (uploadingBanner = v), (m) => (bannerStatus = m));
+      handleUpload(
+        file,
+        "banner",
+        (url) => (bannerUrl = url),
+        (v) => (uploadingBanner = v),
+        (m) => (bannerStatus = m),
+      );
       return;
     }
     cropTarget = "banner";
@@ -148,9 +301,21 @@
     cropTarget = null;
     cropFile = null;
     if (target === "pfp") {
-      handleUpload(croppedFile, "pfp", (url) => (pfpUrl = url), (v) => (uploadingPfp = v), (m) => (pfpStatus = m));
+      handleUpload(
+        croppedFile,
+        "pfp",
+        (url) => (pfpUrl = url),
+        (v) => (uploadingPfp = v),
+        (m) => (pfpStatus = m),
+      );
     } else if (target === "banner") {
-      handleUpload(croppedFile, "banner", (url) => (bannerUrl = url), (v) => (uploadingBanner = v), (m) => (bannerStatus = m));
+      handleUpload(
+        croppedFile,
+        "banner",
+        (url) => (bannerUrl = url),
+        (v) => (uploadingBanner = v),
+        (m) => (bannerStatus = m),
+      );
     }
   }
 
@@ -297,9 +462,67 @@
 
   {#if error}<p class="response error">{error}</p>{/if}
 
+  <p style="font-size: 10px; width: 100%; text-align: left;">Connections</p>
+
+  <div class="connection-row rim">
+    <div class="connection-info">
+      <p class="connection-name">Discord</p>
+      <p class="connection-status">
+        {#if discordLinked}
+          Connected{discordId ? ` (${discordId})` : ""}
+        {:else}
+          Not connected
+        {/if}
+      </p>
+    </div>
+    {#if discordLinked}
+      <button
+        type="button"
+        class="rim danger"
+        disabled={discordBusy}
+        onclick={handleDiscordDisconnect}
+      >
+        {discordBusy ? "Disconnecting..." : "Disconnect"}
+      </button>
+    {:else}
+      <button
+        type="button"
+        class="rim"
+        disabled={discordBusy}
+        onclick={handleDiscordConnect}
+      >
+        {discordBusy ? "Connecting..." : "Connect"}
+      </button>
+    {/if}
+  </div>
+  {#if discordError}<p class="response error">{discordError}</p>{/if}
+
+  <label class="toggle-row">
+    <input
+      type="checkbox"
+      checked={shareListenActivity}
+      onchange={handleShareToggle}
+      disabled={shareSaving}
+    />
+    <span>Share what I'm listening to (feed &amp; Discord presence)</span>
+  </label>
+  <p style="font-size: 10px; width: 100%; text-align: left;">Feed</p>
+
+  {#each feedToggleConfig as { key, label }}
+    <label class="toggle-row">
+      <input
+        type="checkbox"
+        checked={feedDisplayPrefs[key]}
+        onchange={(e) => handleFeedPrefToggle(key, e)}
+        disabled={feedPrefSaving[key]}
+      />
+      <span>Show {label} in my feed</span>
+    </label>
+  {/each}
+
   <p style="font-size: 10px; width: 100%; text-align: left;">Other</p>
-  <button class="logout rim" onclick={handleLogout}>Logout -></button>
-  <button class="delete-account rim" onclick={openDeleteAccountPopup}
+  <button class="logout danger" onclick={handleLogout}>Logout -></button>
+  <button class="delete-account danger" onclick={openDeleteAccountPopup}
     >Delete Account -></button
   >
 </div>
@@ -309,7 +532,10 @@
     file={cropFile}
     aspect={cropTarget === "banner" ? 16 / 5 : 1}
     outputWidth={cropTarget === "banner" ? 1600 : 800}
-    onCancel={() => { cropTarget = null; cropFile = null; }}
+    onCancel={() => {
+      cropTarget = null;
+      cropFile = null;
+    }}
     {onCropped}
   />
 {/if}
@@ -376,6 +602,48 @@
     color: white;
     font-size: 0.85rem;
     margin: 0;
+  }
+
+  .connection-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .connection-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  input[type="checkbox"] {
+    background-color: grey;
+    cursor: default;
+    appearance: auto;
+    box-sizing: border-box;
+    padding: initial;
+    border: initial;
+  }
+
+  .connection-name {
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .connection-status {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin: 0;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    width: 100%;
   }
 
   .logout {

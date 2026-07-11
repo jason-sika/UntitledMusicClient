@@ -2,8 +2,14 @@
   import { onMount, getContext } from "svelte";
   import { goto } from "$app/navigation";
   import { player } from "$lib/stores/player";
+  import { feed as feedStore } from "$lib/stores/feed";
   import { librarySongs } from "$lib/stores/library";
-  import { scanLibrary, deleteSong, renameSongFile, getSongCoverUrl } from "$lib/libraryFs.js";
+  import {
+    scanLibrary,
+    deleteSong,
+    renameSongFile,
+    getSongCoverUrl,
+  } from "$lib/libraryFs.js";
   import ImportSongModal from "$lib/components/ImportSongModal.svelte";
   import AddCollectionModal from "$lib/components/AddCollectionModal.svelte";
   import EditSongModal from "$lib/components/EditSongModal.svelte";
@@ -28,6 +34,80 @@
   let addCollectionKind = $state(null); // "Album" | "Playlist" | null
   let editingSong = $state(null); // song object | null
 
+  let feedItems = $derived($feedStore);
+  let feedPrefs = $state({
+    showFeedImports: true,
+    showFeedListening: true,
+    showFeedLikes: true,
+    showFeedPresence: true,
+  });
+  let loadingFeed = $state(true);
+
+  const feedTypeMeta = {
+    library_add: { icon: "/images/notifications/import.png", verb: "added" },
+    listen: {
+      icon: "/images/notifications/listening.png",
+      verb: "is listening to",
+    },
+    album_publish: {
+      icon: "/images/notifications/import.png",
+      verb: "published an album:",
+    },
+    playlist_publish: {
+      icon: "/images/notifications/import.png",
+      verb: "published a playlist:",
+    },
+    like: { icon: "/images/notifications/like.png", verb: "liked" },
+    presence_change: { icon: "/images/notifications/presence.png", verb: null },
+  };
+
+  function feedPrefKey(kind) {
+    return {
+      library_add: "showFeedImports",
+      listen: "showFeedListening",
+      album_publish: "showFeedImports",
+      playlist_publish: "showFeedImports",
+      like: "showFeedLikes",
+      presence_change: "showFeedPresence",
+    }[kind];
+  }
+
+  const visibleFeedItems = $derived(
+    feedItems.filter((item) => feedPrefs[feedPrefKey(item.kind)] !== false),
+  );
+
+  async function loadFeed(userData) {
+    loadingFeed = true;
+    feedPrefs = {
+      showFeedImports: userData?.showFeedImports ?? true,
+      showFeedListening: userData?.showFeedListening ?? true,
+      showFeedLikes: userData?.showFeedLikes ?? true,
+      showFeedPresence: userData?.showFeedPresence ?? true,
+    };
+    try {
+      const res = await fetch("https://backend.umc.jasonsika.com/api/feed", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      feedStore.setAll(data?.items ?? []);
+    } catch (err) {
+      console.error("Failed to load feed:", err);
+    } finally {
+      loadingFeed = false;
+    }
+  }
+
+  function feedItemText(item) {
+    if (item.kind === "presence_change") {
+      return `is now ${item.data?.refId ?? "online"}`;
+    }
+    const meta = feedTypeMeta[item.kind];
+    const song = item.data?.refTitle
+      ? `${item.data.refTitle}${item.data.refArtist ? ` — ${item.data.refArtist}` : ""}`
+      : "";
+    return `${meta?.verb ?? ""} ${song}`.trim();
+  }
+
   async function loadLibrary() {
     if (!library?.handle) return;
     try {
@@ -49,12 +129,14 @@
     if (!searchOpen) query = "";
   }
 
-
   const searchResults = $derived(
     query.trim()
       ? $librarySongs.filter((s) => {
           const q = query.trim().toLowerCase();
-          return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q);
+          return (
+            s.title.toLowerCase().includes(q) ||
+            s.artist.toLowerCase().includes(q)
+          );
         })
       : [],
   );
@@ -152,6 +234,7 @@
 
       checked = true;
       await loadLibrary();
+      loadFeed(data.user);
     } catch (err) {
       goto("/login");
     }
@@ -162,40 +245,50 @@
   <div class="homepage">
     <div class="library">
       <div class="titleBar">
-          <p>Library</p>
-          <div class="rightButtonWrap">
-              <button class="searchWrapper forceActive" onclick={toggleSearch}>
-                <input
-                  type="text"
-                  placeholder="Search your library..."
-                  bind:value={query}
-                  autofocus
-                />
-                {#if searchOpen}
-                  <div class="searchDropdown rim">
-                    <div class="searchDropList">
-                      {#if query.trim() && searchResults.length === 0}
-                        <p class="searchState">No matches in your library.</p>
-                      {:else}
-                        {#each searchResults as song (song.id)}
-                          <div class="searchResultRow">
-                            <div class="resultText">
-                              <p class="resultTitle">{song.title}</p>
-                              <p class="resultArtist">{song.artist}</p>
-                            </div>
-                            <button class="previewBtn" onclick={() => previewSong(song)} aria-label="Preview">
-                              ►
-                            </button>
-                          </div>
-                        {/each}
-                      {/if}
-                    </div>
-                  </div>
-                {/if}
-              </button>
-              <button class="backBtn" onclick={handleImportClick} disabled={!songsDir}> ⤓ Import </button>
-              <button class="backBtn"> ❖ Library Settings </button>
-          </div>
+        <p>Library</p>
+        <div class="rightButtonWrap">
+          <button class="searchWrapper forceActive" onclick={toggleSearch}>
+            <input
+              type="text"
+              placeholder="Search your library..."
+              bind:value={query}
+              autofocus
+            />
+            {#if searchOpen}
+              <div class="searchDropdown rim">
+                <div class="searchDropList">
+                  {#if query.trim() && searchResults.length === 0}
+                    <p class="searchState">No matches in your library.</p>
+                  {:else}
+                    {#each searchResults as song (song.id)}
+                      <div class="searchResultRow">
+                        <div class="resultText">
+                          <p class="resultTitle">{song.title}</p>
+                          <p class="resultArtist">{song.artist}</p>
+                        </div>
+                        <button
+                          class="previewBtn"
+                          onclick={() => previewSong(song)}
+                          aria-label="Preview"
+                        >
+                          ►
+                        </button>
+                      </div>
+                    {/each}
+                  {/if}
+                </div>
+              </div>
+            {/if}
+          </button>
+          <button
+            class="backBtn"
+            onclick={handleImportClick}
+            disabled={!songsDir}
+          >
+            ⤓ Import
+          </button>
+          <button class="backBtn"> ❖ Library Settings </button>
+        </div>
       </div>
 
       {#if libraryError}
@@ -205,27 +298,37 @@
       <div class="rowWrapper">
         <div class="songRow row rim" class:row1closed>
           <div class="titleBarRow">
-              <p>Songs {songs.length ? `(${songs.length})` : ""}</p>
-              <div class="rightButtonWrap">
-                  <button class="backBtn" onclick={() => (row1closed = !row1closed)}>
-                    <p>{row1closed ? "Open Tab ►" : "Close ▼"}</p>
-                  </button>
-              </div>
+            <p>Songs {songs.length ? `(${songs.length})` : ""}</p>
+            <div class="rightButtonWrap">
+              <button
+                class="backBtn"
+                onclick={() => (row1closed = !row1closed)}
+              >
+                <p>{row1closed ? "Open Tab ►" : "Close ▼"}</p>
+              </button>
+            </div>
           </div>
 
           {#if !row1closed}
             <div class="songList">
               {#if songs.length === 0}
-                <p class="emptyState">No songs yet — import some to get started.</p>
+                <p class="emptyState">
+                  No songs yet — import some to get started.
+                </p>
               {:else}
                 {#each songs as song (song.id)}
-                  <div class="songItem" class:nowPlaying={$player.songId === song.id}>
+                  <div
+                    class="songItem"
+                    class:nowPlaying={$player.songId === song.id}
+                  >
                     <button
                       class="playBtn"
                       onclick={() => playSong(song)}
                       aria-label="Play {song.title}"
                     >
-                      {$player.songId === song.id && $player.isPlaying ? "Ⅱ" : "►"}
+                      {$player.songId === song.id && $player.isPlaying
+                        ? "Ⅱ"
+                        : "►"}
                     </button>
                     <div class="songText">
                       <p class="songTitle">{song.title}</p>
@@ -251,72 +354,123 @@
               {/if}
             </div>
           {/if}
-      </div>
+        </div>
         <div class="albumRow row rim" class:row2closed>
-            <div class="titleBarRow">
-                <p>Albums {albums.length ? `(${albums.length})` : ""}</p>
-                <div class="rightButtonWrap">
-                    <button class="backBtn" onclick={openAddAlbum}> + Add Album </button>
-                    <button class="backBtn" onclick={() => (row2closed = !row2closed)}>
-                      <p>{row2closed ? "Open Tab ►" : "Close ▼"}</p>
-                    </button>
-                </div>
+          <div class="titleBarRow">
+            <p>Albums {albums.length ? `(${albums.length})` : ""}</p>
+            <div class="rightButtonWrap">
+              <button class="backBtn" onclick={openAddAlbum}>
+                + Add Album
+              </button>
+              <button
+                class="backBtn"
+                onclick={() => (row2closed = !row2closed)}
+              >
+                <p>{row2closed ? "Open Tab ►" : "Close ▼"}</p>
+              </button>
             </div>
+          </div>
 
           {#if !row2closed}
             <div class="collectionList">
               {#if albums.length === 0}
                 <p class="emptyState">No albums yet.</p>
               {:else}
-              {#each albums as album (album.id)}
-                <button class="collectionItem" onclick={() => goto(`/app/album/${album.id}`)}>
-                  <img src={album.artworkUrl || "/images/plhd.png"} alt="Album Art" />
-                  <p class="songTitle">{album.name || "Untitled Album"}</p>
-                  {#if album.year}<p class="songExt">{album.year}</p>{/if}
-                </button>
-              {/each}
+                {#each albums as album (album.id)}
+                  <button
+                    class="collectionItem"
+                    onclick={() => goto(`/app/album/${album.id}`)}
+                  >
+                    <img
+                      src={album.artworkUrl || "/images/plhd.png"}
+                      alt="Album Art"
+                    />
+                    <p class="songTitle">{album.name || "Untitled Album"}</p>
+                    {#if album.year}<p class="songExt">{album.year}</p>{/if}
+                  </button>
+                {/each}
               {/if}
             </div>
           {/if}
-      </div>
+        </div>
         <div class="playlistRow row rim" class:row3closed>
-            <div class="titleBarRow">
-                <p>Playlists {playlists.length ? `(${playlists.length})` : ""}</p>
-                <div class="rightButtonWrap">
-                    <button class="backBtn" onclick={openAddPlaylist}> + Add Playlist </button>
-                    <button class="backBtn" onclick={() => (row3closed = !row3closed)}>
-                      <p>{row3closed ? "Open Tab ►" : "Close ▼"}</p>
-                    </button>
-                </div>
+          <div class="titleBarRow">
+            <p>Playlists {playlists.length ? `(${playlists.length})` : ""}</p>
+            <div class="rightButtonWrap">
+              <button class="backBtn" onclick={openAddPlaylist}>
+                + Add Playlist
+              </button>
+              <button
+                class="backBtn"
+                onclick={() => (row3closed = !row3closed)}
+              >
+                <p>{row3closed ? "Open Tab ►" : "Close ▼"}</p>
+              </button>
             </div>
+          </div>
 
           {#if !row3closed}
             <div class="collectionList">
               {#if playlists.length === 0}
                 <p class="emptyState">No playlists yet.</p>
               {:else}
-              {#each playlists as playlist (playlist.id)}
-                <button class="collectionItem" onclick={() => goto(`/app/playlist/${playlist.id}`)}>
-                  <img src={playlist.artworkUrl || "/images/plhd.png"} alt="Playlist Art" />
-                  <p class="songTitle">{playlist.name || "Untitled Playlist"}</p>
-                </button>
-              {/each}
+                {#each playlists as playlist (playlist.id)}
+                  <button
+                    class="collectionItem"
+                    onclick={() => goto(`/app/playlist/${playlist.id}`)}
+                  >
+                    <img
+                      src={playlist.artworkUrl || "/images/plhd.png"}
+                      alt="Playlist Art"
+                    />
+                    <p class="songTitle">
+                      {playlist.name || "Untitled Playlist"}
+                    </p>
+                  </button>
+                {/each}
               {/if}
             </div>
           {/if}
-      </div>
+        </div>
       </div>
     </div>
     <div class="feed rim">
-        <div class="titleBar">
-            <p>Your Feed</p>
-        </div>
-        <div class="feedContent">
-
-        </div>
+      <div class="titleBar">
+        <p>Your Feed</p>
+      </div>
+      <div class="feedContent">
+        {#if loadingFeed}
+          <p class="feedEmptyState">Loading...</p>
+        {:else if visibleFeedItems.length === 0}
+          <p class="feedEmptyState">Nothing from your friends yet.</p>
+        {:else}
+          {#each visibleFeedItems as item (item.id)}
+            <div class="feedRow rim">
+              <div class="feedActorWrap rim">
+                <img
+                  class="feedActorPfp rim"
+                  src={item.actorPfp || "/images/plhd.png"}
+                  alt=""
+                />
+              </div>
+              <div class="feedText">
+                <p class="feedLine">
+                  <span class="feedActorName"
+                    >@{item.actorUsername ?? "Someone"}</span
+                  >
+                  {feedItemText(item)}
+                </p>
+              </div>
+              {#if item.data?.coverUrl}
+                <img class="feedCover" src={item.data.coverUrl} alt="" />
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
     </div>
   </div>
-  {/if}
+{/if}
 
 {#if importFiles?.length}
   <ImportSongModal
@@ -673,4 +827,91 @@
       justify-content: center;
       flex-shrink: 0;
     }
+
+.feed {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 265px !important;
+  flex-shrink: 0;           /* prevent it from being squeezed OR from growing */
+  background: linear-gradient(to bottom, #ffffff, #eeeeee);
+  height: 100%;
+}
+
+.feedContent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 1px 10px 15px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;       /* was missing — this is likely the main fix */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+.feedRow {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  width: 100%;
+  min-width: 0;             /* lets the flex child below actually shrink */
+  box-sizing: border-box;
+  transition: background 0.15s ease;
+  background: linear-gradient(to bottom, #ffffff, #eeeeee);
+}
+
+.feedRow:hover {
+  background: #00000008;
+}
+
+.feedActorWrap {
+  flex-shrink: 0;
+}
+
+.feedActorPfp {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  background-color: white;
+}
+
+
+.feedText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;         /* was missing on the wrapper, only had it on feedLine */
+}
+
+.feedLine {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  opacity: 0.7;
+  white-space: wrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feedActorName {
+  font-weight: 500;
+  opacity: 1;
+}
+
+.feedCover {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.feedEmptyState {
+  font-size: 12px;
+  opacity: 0.4;
+  padding: 10px;
+  text-align: center;
+}
 </style>

@@ -1,8 +1,20 @@
 <script>
-  import { importSong, saveSongCover, addSongToCollection } from "$lib/libraryFs.js";
+  import {
+    importSong,
+    saveSongCover,
+    addSongToCollection,
+  } from "$lib/libraryFs.js";
   import ImageCropper from "$lib/components/ImageCropper.svelte";
 
-  let { onClose, songsDir, rootHandle, albums = [], playlists = [], files, onImported } = $props();
+  let {
+    onClose,
+    songsDir,
+    rootHandle,
+    albums = [],
+    playlists = [],
+    files,
+    onImported,
+  } = $props();
 
   let index = $state(0);
   let title = $state("");
@@ -42,9 +54,24 @@
     cropFile = file; // opens the cropper
   }
 
-  function onCropped(croppedFile) {
-    coverFile = croppedFile;
-    cropFile = null;
+  async function reportImportToBackend(result) {
+    try {
+      await fetch("https://backend.umc.jasonsika.com/api/library/import", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          localId: result.id,
+          title: result.title,
+          artist: result.artist,
+          fileExt: result.ext,
+        }),
+      });
+    } catch {
+      // Best-effort — the song is already safely imported locally even if
+      // this fails, so we don't want a network hiccup to look like an
+      // import error to the user.
+    }
   }
 
   async function submitCurrent() {
@@ -65,8 +92,15 @@
         await addSongToCollection(rootHandle, "Album", albumId, result.id);
       }
       if (playlistId) {
-        await addSongToCollection(rootHandle, "Playlist", playlistId, result.id);
+        await addSongToCollection(
+          rootHandle,
+          "Playlist",
+          playlistId,
+          result.id,
+        );
       }
+
+      reportImportToBackend(result); // fire-and-forget, doesn't block the import flow
 
       imported = [...imported, result];
       if (isLast) {
@@ -85,6 +119,11 @@
     } finally {
       saving = false;
     }
+  }
+
+  function onCropped(croppedFile) {
+    coverFile = croppedFile;
+    cropFile = null;
   }
 
   function skipCurrent() {
@@ -116,14 +155,25 @@
       </div>
 
       <p class="hint">
-        Add details for <strong>{currentFile?.name}</strong> before it's added to your library.
+        Add details for <strong>{currentFile?.name}</strong> before it's added to
+        your library.
       </p>
 
       <div class="formInput rim">
-        <input type="text" placeholder="Song title..." bind:value={title} maxlength="120" />
+        <input
+          type="text"
+          placeholder="Song title..."
+          bind:value={title}
+          maxlength="120"
+        />
       </div>
       <div class="formInput rim">
-        <input type="text" placeholder="Artist..." bind:value={artist} maxlength="120" />
+        <input
+          type="text"
+          placeholder="Artist..."
+          bind:value={artist}
+          maxlength="120"
+        />
       </div>
 
       <div class="formInput rim">
@@ -139,7 +189,9 @@
         <select bind:value={playlistId}>
           <option value="">No playlist</option>
           {#each playlists as playlist (playlist.id)}
-            <option value={playlist.id}>{playlist.name || "Untitled Playlist"}</option>
+            <option value={playlist.id}
+              >{playlist.name || "Untitled Playlist"}</option
+            >
           {/each}
         </select>
       </div>
@@ -154,10 +206,20 @@
       {#if error}<p class="response error">{error}</p>{/if}
 
       <div class="actionsRow">
-        <button type="button" class="skip rim" onclick={skipCurrent} disabled={saving}>
+        <button
+          type="button"
+          class="skip rim"
+          onclick={skipCurrent}
+          disabled={saving}
+        >
           Skip
         </button>
-        <button type="button" class="send rim" onclick={submitCurrent} disabled={saving}>
+        <button
+          type="button"
+          class="send rim"
+          onclick={submitCurrent}
+          disabled={saving}
+        >
           {saving ? "Adding..." : isLast ? "Add to Library" : "Add & Next"}
         </button>
       </div>
@@ -193,8 +255,12 @@
   }
 
   @keyframes fadein {
-    0% { background-color: #ffffff00; }
-    100% { background-color: #ffffff; }
+    0% {
+      background-color: #ffffff00;
+    }
+    100% {
+      background-color: #ffffff;
+    }
   }
 
   .pingwrapper {
@@ -221,8 +287,16 @@
   }
 
   @keyframes popup {
-    0% { opacity: 0.5; filter: blur(5px); transform: scale(0.9); }
-    100% { opacity: 1; filter: blur(0px); transform: scale(1); }
+    0% {
+      opacity: 0.5;
+      filter: blur(5px);
+      transform: scale(0.9);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0px);
+      transform: scale(1);
+    }
   }
 
   .toptitle {

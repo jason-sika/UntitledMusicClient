@@ -1,4 +1,18 @@
 import { writable } from 'svelte/store';
+import { sendDiscordActivity, clearDiscordActivity } from '$lib/discord.js';
+
+async function reportListeningStatus(track) {
+  try {
+    await fetch('https://backend.umc.jasonsika.com/api/presence/listening', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track }), // track: { title, artist, songId } | null
+    });
+  } catch {
+    // best-effort, same posture as the other presence calls
+  }
+}
 
 function createPlayerStore() {
   const { subscribe, update } = writable({
@@ -12,10 +26,69 @@ function createPlayerStore() {
     ready: false,
   });
 
+  // Kept in sync via the subscribe below so Discord notifications (and
+  // anything else that needs a synchronous read) don't have to thread
+  // state through every call site.
+  let snapshot;
+  subscribe((s) => { snapshot = s; });
+
   let audioEl = null;
   let currentObjectUrl = null;
   let queue = [];
   let queueIndex = -1;
+
+  // Whether to push listening activity to Discord at all — mirrors the
+  // user's shareListenActivity setting. Off by default until the app
+  // explicitly enables it (see AccountSettings.svelte), so we never leak
+  // listening activity before we know the user's preference.
+  let discordEnabled = false;
+
+  function setDiscordEnabled(enabled) {
+    discordEnabled = enabled;
+    if (!enabled) {
+      clearDiscordActivity();
+      reportListeningStatus(null);
+    } else {
+      notifyDiscord();
+      notifyListening();
+    }
+  }
+
+  // Call only on discrete state changes (song loaded, play, pause, stop) —
+  // never from the per-frame ticker, or the debounce in discord.js would
+  // never get a quiet moment to actually fire.
+  function notifyDiscord() {
+    if (!discordEnabled) return;
+    if (!snapshot.title) return;
+
+    sendDiscordActivity({
+      title: snapshot.title,
+      artist: snapshot.artist,
+      // Local library art is a blob: URL and useless to Discord's CDN —
+      // only forward it if it's already a real, fetchable URL.
+      albumArt: snapshot.albumArt?.startsWith('http') ? snapshot.albumArt : '',
+      isPlaying: snapshot.isPlaying,
+      currentTime: snapshot.currentTime,
+      duration: snapshot.duration,
+    });
+  }
+
+  // Broadcasts "currently listening" to friends, independent of Discord.
+  // Gated on the same discordEnabled flag — it's really "shareListenActivity"
+  // under the hood (see the Settings.svelte toggle label), so one flag
+  // correctly governs both destinations.
+  function notifyListening() {
+    if (!discordEnabled) return;
+    if (!snapshot.title) {
+      reportListeningStatus(null);
+      return;
+    }
+    reportListeningStatus({
+      songId: snapshot.songId,
+      title: snapshot.title,
+      artist: snapshot.artist,
+    });
+  }
 
   function setMediaSessionMetadata(meta) {
     if (!('mediaSession' in navigator)) return;
@@ -60,6 +133,8 @@ function createPlayerStore() {
     }
     audioEl = null;
     update((s) => ({ ...s, ready: false }));
+    clearDiscordActivity();
+    reportListeningStatus(null);
   }
 
   // `song` can be a File, or a FileSystemFileHandle (has .getFile()) —
@@ -94,6 +169,10 @@ function createPlayerStore() {
 
     audioEl.src = url;
     setMediaSessionMetadata(meta);
+    notifyDiscord(); // reflect the new track even if autoplay ends up blocked below
+    notifyListening();
+
+
     audioEl.play().catch(() => {
       // autoplay can be blocked without a user gesture — isPlaying
       // stays false and the play button just shows "play" as normal
@@ -124,7 +203,7 @@ function createPlayerStore() {
   }
 
   function play() {
-    audioEl?.play().catch(() => {});
+    audioEl?.play().catch(() => { });
   }
 
   function pause() {
@@ -166,6 +245,8 @@ function createPlayerStore() {
   function setPlaying(isPlaying) {
     update((s) => ({ ...s, isPlaying }));
     setMediaSessionState(isPlaying);
+    notifyDiscord();
+    notifyListening();
   }
 
   function setTime(currentTime, duration) {
@@ -173,8 +254,13 @@ function createPlayerStore() {
     if ('mediaSession' in navigator && duration > 0) {
       try {
         navigator.mediaSession.setPositionState({ duration, position: currentTime, playbackRate: 1 });
-      } catch {}
+      } catch { }
     }
+    // Deliberately NOT calling notifyDiscord() here — this fires many times
+    // a second while playing, which would starve the debounce and mean
+    // presence never actually gets sent. Discord's own elapsed-time display
+    // is driven off the start/end timestamps sent in notifyDiscord(), not
+    // by us polling it.
   }
 
   return {
@@ -190,6 +276,7 @@ function createPlayerStore() {
     seek,
     setPlaying,
     setTime,
+    setDiscordEnabled,
   };
 }
 

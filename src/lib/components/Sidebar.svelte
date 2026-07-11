@@ -926,7 +926,7 @@
     gap: 10px;
     left: 265px;
     top: 10px;
-    margin-left: 24px;
+    margin-left: 20px !important;
     z-index: 100;
   }
 

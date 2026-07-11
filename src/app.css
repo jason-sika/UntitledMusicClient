@@ -42,7 +42,7 @@ button {
   font-family: "InterVariable", sans-serif;
   font-size: 1rem;
   font-weight: 400;
-  background: linear-gradient(to bottom, #FFFFFF, #EEEEEE70);
+  background: linear-gradient(to bottom, #ffffff, #eeeeee70);
   color: rgba(0, 0, 0, 0.7);
   padding: 7px 20px;
   text-shadow:
@@ -53,15 +53,18 @@ button {
 }
 
 button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 1px 1px rgba(0, 0, 0, 0.32);
-    background: linear-gradient(to bottom, #EEEEEE70, #FFFFFF70);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 1px 1px rgba(0, 0, 0, 0.32);
+  background: linear-gradient(to bottom, #eeeeee70, #ffffff70);
 }
 
 button:active {
   transform: translateY(2px);
-  box-shadow: 0 0px 1px 1px rgba(0, 0, 0, 0.32), inset 0 0px 5px 1px rgba(0, 0, 0, 0.32), inset 0 2px 0px 1px rgba(0, 0, 0, 0.2);
-  background: linear-gradient(to bottom, #EEEEEE70,  #FFFFFF70);
+  box-shadow:
+    0 0px 1px 1px rgba(0, 0, 0, 0.32),
+    inset 0 0px 5px 1px rgba(0, 0, 0, 0.32),
+    inset 0 2px 0px 1px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(to bottom, #eeeeee70, #ffffff70);
 }
 
 button:after {
@@ -80,6 +83,59 @@ button:before {
   position: absolute;
   inset: 0;
   box-shadow: inset 0 0px 0px 1px rgba(255, 255, 255, 0.2);
+  mix-blend-mode: plus-lighter;
+  z-index: 1;
+  pointer-events: none;
+}
+
+button.danger {
+  all: unset;
+  position: relative;
+  cursor: pointer;
+  font-family: "InterVariable", sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  background: linear-gradient(to bottom, #ffffff, #ffb3b370);
+  color: rgba(0, 0, 0, 0.7);
+  padding: 7px 20px;
+  text-shadow:
+    0px 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0px 1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 1px 1px rgba(40, 26, 26, 0.32);
+  backdrop-filter: blur(50px);
+}
+
+button.danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 1px 1px rgba(40, 26, 26, 0.32);
+  background: linear-gradient(to bottom, #ffffff, #ffb3b370);
+}
+
+button.danger:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 0px 1px 1px rgba(40, 26, 26, 0.32),
+    inset 0 0px 5px 1px rgba(0, 0, 0, 0.32),
+    inset 0 2px 0px 1px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(to bottom, #ffffff, #ffb3b370);
+}
+
+button.danger:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  outline: 1px solid rgba(37, 28, 28, 0.32);
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
+}
+
+button.danger:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0px 0px 1px rgba(255, 240, 240, 0.2);
   mix-blend-mode: plus-lighter;
   z-index: 1;
   pointer-events: none;
@@ -171,24 +227,24 @@ button:before {
 } */
 
 .rim::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    outline: 1px solid rgb(0 0 0 / 32%);
-    mix-blend-mode: multiply;
-    opacity: 0.5;
-    z-index: 1;
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  outline: 1px solid rgb(0 0 0 / 32%);
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .rim::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    box-shadow: inset 0 0px 0px 1px rgba(255, 255, 255, 0.2);
-    mix-blend-mode: plus-lighter;
-    z-index: 1;
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0px 0px 1px rgba(255, 255, 255, 0.2);
+  mix-blend-mode: plus-lighter;
+  z-index: 1;
+  pointer-events: none;
 }
 
 /*  Loading ---- */
