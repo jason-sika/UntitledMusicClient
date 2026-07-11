@@ -5,6 +5,7 @@
     addSongToCollection,
   } from "$lib/libraryFs.js";
   import ImageCropper from "$lib/components/ImageCropper.svelte";
+  import { fetchAlbumArtFromServer, urlToFile } from "$lib/albumArt.js";
 
   let {
     onClose,
@@ -27,6 +28,10 @@
   let imported = $state([]);
 
   let cropFile = $state(null); // raw file awaiting crop, or null
+
+  // Hidden file input triggered programmatically by its button — buttons
+  // can't proxy-open a file picker the way <label> elements do.
+  let coverInputRef;
 
   function prefillFromFilename(file) {
     const base = file.name.replace(/\.[^/.]+$/, "");
@@ -74,6 +79,31 @@
     }
   }
 
+  async function autoFetchCover(result) {
+    // Only attempt this when the user didn't manually provide a cover.
+    if (coverFile) return;
+
+    // Always search by artist + song title. If this song is going into an
+    // album, pass the album name too for a more specific match — the search
+    // endpoint accepts artist+song, artist+album, or all three together.
+    const selectedAlbum = albums.find((a) => a.id === albumId);
+
+    try {
+      const { album_art } = await fetchAlbumArtFromServer(
+        result.artist,
+        result.title,
+        selectedAlbum?.name || "",
+      );
+      if (!album_art) return; // animated-only result, nothing static to save as cover.webp
+
+      const file = await urlToFile(album_art, "cover.webp");
+      await saveSongCover(songsDir, result.dirname, file);
+    } catch {
+      // Best-effort — no artwork found, or the fetch failed. The song is
+      // already imported successfully regardless; it just won't have a cover.
+    }
+  }
+
   async function submitCurrent() {
     if (saving) return;
     error = "";
@@ -87,7 +117,10 @@
 
       if (coverFile) {
         await saveSongCover(songsDir, result.dirname, coverFile);
+      } else {
+        await autoFetchCover(result);
       }
+
       if (albumId) {
         await addSongToCollection(rootHandle, "Album", albumId, result.id);
       }
@@ -100,7 +133,7 @@
         );
       }
 
-      reportImportToBackend(result); // fire-and-forget, doesn't block the import flow
+      reportImportToBackend(result);
 
       imported = [...imported, result];
       if (isLast) {
@@ -196,12 +229,22 @@
         </select>
       </div>
 
-      <label class="formInput rim coverRow">
+      <button
+        type="button"
+        class="formInput rim coverRow"
+        onclick={() => coverInputRef.click()}
+      >
         <span class="coverLabel">
           {coverFile ? coverFile.name : "Song cover (optional)"}
         </span>
-        <input type="file" accept="image/*" onchange={handleCoverChange} />
-      </label>
+      </button>
+      <input
+        type="file"
+        accept="image/*"
+        class="hiddenFileInput"
+        bind:this={coverInputRef}
+        onchange={handleCoverChange}
+      />
 
       {#if error}<p class="response error">{error}</p>{/if}
 
@@ -356,6 +399,8 @@
     flex-direction: row;
     align-items: center;
     cursor: pointer;
+    text-align: left;
+    justify-content: flex-start;
   }
 
   .coverLabel {
@@ -363,7 +408,7 @@
     opacity: 0.6;
   }
 
-  .coverRow input[type="file"] {
+  .hiddenFileInput {
     display: none;
   }
 

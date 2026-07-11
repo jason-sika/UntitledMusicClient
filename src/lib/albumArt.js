@@ -3,12 +3,18 @@
 const SEARCH_BASE = "https://pull.jasonsika.com/api/search";
 const ANIMATED_BASE = "https://server.jasonsika.com";
 
-// Looks up artwork (and animated art, if available) for an artist/album.
+// Looks up artwork (and animated art, if available) for an artist/song, with
+// an optional album name. The endpoint accepts:
+//   artist + song              (album omitted — standalone track)
+//   artist + album              (song omitted — album-level art)
+//   artist + song + album       (both — most specific match)
 // Returns { album_art, animated_art } as URLs — throws if nothing is found.
-export async function fetchAlbumArtFromServer(artist, album) {
-  const searchRes = await fetch(
-    `${SEARCH_BASE}?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`,
-  );
+export async function fetchAlbumArtFromServer(artist, song, album = "") {
+  const params = new URLSearchParams({ artist });
+  if (song) params.set("song", song);
+  if (album) params.set("album", album);
+
+  const searchRes = await fetch(`${SEARCH_BASE}?${params.toString()}`);
   if (!searchRes.ok) throw new Error("Artwork search failed.");
   const d = await searchRes.json();
 
@@ -19,7 +25,7 @@ export async function fetchAlbumArtFromServer(artist, album) {
   // Deezer URLs don't work with this endpoint (same caveat as playbackSync.js)
   if (d.url && d.url.includes("music.apple.com")) {
     const artRes = await fetch(
-      `${ANIMATED_BASE}/animated-art-lookup?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}&url=${encodeURIComponent(d.url)}`,
+      `${ANIMATED_BASE}/animated-art-lookup?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album || song)}&url=${encodeURIComponent(d.url)}`,
     );
     if (artRes.ok) {
       const artData = await artRes.json();
@@ -35,7 +41,7 @@ export async function fetchAlbumArtFromServer(artist, album) {
   }
 
   if (!album_art && !animated_art) {
-    throw new Error("No artwork found for that artist/album.");
+    throw new Error("No artwork found for that artist/song.");
   }
 
   return { album_art, animated_art };

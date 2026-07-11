@@ -41,6 +41,13 @@
   let cropTarget = $state(null); // "banner" | "artwork" | "animated" | null
   let cropFile = $state(null);
 
+  // Hidden file inputs triggered programmatically by their paired buttons —
+  // buttons can't proxy-open a file picker the way <label> elements do, so
+  // we hold refs and call .click() on them ourselves.
+  let bannerInputRef;
+  let coverInputRef;
+  let animatedInputRef;
+
   function handleAssetUpload(assetType, e) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -167,7 +174,8 @@
   }
 
   async function handleDeleteCollection() {
-    if (!confirm(`Delete this ${kind.toLowerCase()}? This can't be undone.`)) return;
+    if (!confirm(`Delete this ${kind.toLowerCase()}? This can't be undone.`))
+      return;
     saving = true;
     error = "";
     try {
@@ -198,7 +206,8 @@
     fetchingArt = true;
     error = "";
     try {
-      const searchArtist = collection.artists?.[0] || tracks[0]?.song?.artist || "";
+      const searchArtist =
+        collection.artists?.[0] || tracks[0]?.song?.artist || "";
       if (!searchArtist) {
         throw new Error("Add an artist to this collection first.");
       }
@@ -206,8 +215,13 @@
         throw new Error("Add an album/playlist name first.");
       }
 
+      // This is a collection-level lookup (whole album/playlist), not a
+      // single song — so collection.name goes in the album slot, and song
+      // is left empty. That routes the worker to its album-only search path
+      // instead of treating the collection name as a song title.
       const { album_art, animated_art } = await fetchAlbumArtFromServer(
         searchArtist,
+        "",
         collection.name,
       );
 
@@ -291,14 +305,28 @@
   <div class="profilepage">
     <div
       class="banner"
-      style="background-image: {collection.bannerUrl ? `url(${collection.bannerUrl})` : 'none'};"
+      style="background-image: {collection.bannerUrl
+        ? `url(${collection.bannerUrl})`
+        : 'none'};"
     >
-      <button class="backBtn" onclick={() => goto("/app")}> ← Back to Library </button>
+      <button class="backBtn" onclick={() => goto("/app")}>
+        ← Back to Library
+      </button>
       {#if editing}
-        <label class="assetUpload bannerUpload rim">
+        <button
+          type="button"
+          class="assetUpload bannerUpload rim"
+          onclick={() => bannerInputRef.click()}
+        >
           Change Banner
-          <input type="file" accept="image/*" onchange={(e) => handleAssetUpload("banner", e)} />
-        </label>
+        </button>
+        <input
+          type="file"
+          accept="image/*"
+          class="hiddenFileInput"
+          bind:this={bannerInputRef}
+          onchange={(e) => handleAssetUpload("banner", e)}
+        />
       {/if}
     </div>
 
@@ -321,61 +349,115 @@
           />
         {/if}
         {#if editing}
-          <label class="assetUpload coverUpload rim">
+          <button
+            type="button"
+            class="assetUpload coverUpload rim"
+            onclick={() => coverInputRef.click()}
+          >
             ✎
-            <input type="file" accept="image/*" onchange={(e) => handleAssetUpload("artwork", e)} />
-          </label>
+          </button>
+          <input
+            type="file"
+            accept="image/*"
+            class="hiddenFileInput"
+            bind:this={coverInputRef}
+            onchange={(e) => handleAssetUpload("artwork", e)}
+          />
         {/if}
       </div>
 
       <div class="info">
         {#if editing}
-          <input class="editTitle" bind:value={editName} placeholder="{kind} title" />
+          <input
+            class="editTitle"
+            bind:value={editName}
+            placeholder="{kind} title"
+          />
           <div class="tags">
             <input class="editSmall" bind:value={editYear} placeholder="Year" />
-            <input class="editSmall" bind:value={editGenre} placeholder="Genre" />
-            <input class="editSmall wide" bind:value={editArtists} placeholder="Artists, comma separated" />
+            <input
+              class="editSmall"
+              bind:value={editGenre}
+              placeholder="Genre"
+            />
+            <input
+              class="editSmall wide"
+              bind:value={editArtists}
+              placeholder="Artists, comma separated"
+            />
           </div>
         {:else}
           <h1>{collection.name || `Untitled ${kind}`}</h1>
           <div class="tags">
-            {#if collection.year}<div class="tag rim"><p>{collection.year}</p></div>{/if}
-            {#if collection.genre}<div class="tag rim"><p>{collection.genre}</p></div>{/if}
-            {#if collection.artists?.length}<p class="username">{collection.artists.join(", ")}</p>{/if}
+            {#if collection.year}<div class="tag rim">
+                <p>{collection.year}</p>
+              </div>{/if}
+            {#if collection.genre}<div class="tag rim">
+                <p>{collection.genre}</p>
+              </div>{/if}
+            {#if collection.artists?.length}<p class="username">
+                {collection.artists.join(", ")}
+              </p>{/if}
           </div>
         {/if}
       </div>
 
       <div class="actions">
-              {#if editing}
-                <button class="friendbtn" onclick={saveEdits} disabled={saving}>
-                  {saving ? "Saving..." : "Save"}
-                </button>
-                <button class="friendbtn" onclick={cancelEditing} disabled={saving}>Cancel</button>
-                <button class="friendbtn dangerBtn" onclick={handleDeleteCollection} disabled={saving}>
-                  Delete
-                </button>
-              {:else}
-                <button class="friendbtn" onclick={startEditing}>Edit</button>
-              {/if}
-              <button class="friendbtn" onclick={handleFetchArtFromServer} disabled={saving || fetchingArt}>
-                {fetchingArt ? "Fetching Art..." : "Fetch Art from Server"}
-              </button>
-              <button class="btn2" onclick={playAll} disabled={tracks.length === 0}>
-                ► Play All
-              </button>
-              <button class="btn2" onclick={playShuffled} disabled={tracks.length === 0}>
-                ⤭ Shuffle
-              </button>
-            </div>
-          </div>
+        {#if editing}
+          <button class="friendbtn" onclick={saveEdits} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <button class="friendbtn" onclick={cancelEditing} disabled={saving}
+            >Cancel</button
+          >
+          <button
+            class="friendbtn dangerBtn"
+            onclick={handleDeleteCollection}
+            disabled={saving}
+          >
+            Delete
+          </button>
+        {:else}
+          <button class="friendbtn" onclick={startEditing}>Edit</button>
+        {/if}
+        <button
+          class="friendbtn"
+          onclick={handleFetchArtFromServer}
+          disabled={saving || fetchingArt}
+        >
+          {fetchingArt ? "Fetching Art..." : "Fetch Art from Server"}
+        </button>
+        <button class="btn2" onclick={playAll} disabled={tracks.length === 0}>
+          ► Play All
+        </button>
+        <button
+          class="btn2"
+          onclick={playShuffled}
+          disabled={tracks.length === 0}
+        >
+          ⤭ Shuffle
+        </button>
+      </div>
+    </div>
 
-          {#if editing}
-            <button class="animatedUpload rim">
-        {collection.animatedArtUrl ? "Replace Animated Cover" : "Add Animated Cover (optional)"}
-              <input type="file" accept="video/mp4" onchange={(e) => handleAssetUpload("animated", e)} />
-            </button>
-          {/if}
+    {#if editing}
+      <button
+        type="button"
+        class="animatedUpload rim"
+        onclick={() => animatedInputRef.click()}
+      >
+        {collection.animatedArtUrl
+          ? "Replace Animated Cover"
+          : "Add Animated Cover (optional)"}
+      </button>
+      <input
+        type="file"
+        accept="video/mp4"
+        class="hiddenFileInput"
+        bind:this={animatedInputRef}
+        onchange={(e) => handleAssetUpload("animated", e)}
+      />
+    {/if}
 
     {#if error}<p class="libError">{error}</p>{/if}
 
@@ -387,7 +469,7 @@
 
     {#if availableSongs.length > 0}
       <div class="addSongRow">
-        <select class="addSongSelect " bind:value={addSongId}>
+        <select class="addSongSelect" bind:value={addSongId}>
           <option value="">Add a song...</option>
           {#each availableSongs as s (s.id)}
             <option value={s.id}>{s.title} — {s.artist}</option>
@@ -402,7 +484,11 @@
       {:else}
         {#each tracks as t, i (t.songId)}
           <div class="songItem" class:nowPlaying={$player.songId === t.songId}>
-            <button class="playBtn" onclick={() => playTrack(t.song)} aria-label="Play {t.song.title}">
+            <button
+              class="playBtn"
+              onclick={() => playTrack(t.song)}
+              aria-label="Play {t.song.title}"
+            >
               {$player.songId === t.songId && $player.isPlaying ? "Ⅱ" : "►"}
             </button>
             <p class="trackNum">{t.track}</p>
@@ -439,23 +525,39 @@
         {/each}
       {/if}
     </div>
-      </div>
+  </div>
 
-      {#if cropTarget}
-        <ImageCropper
-          file={cropFile}
-          aspect={cropTarget === "banner" ? 16 / 5 : 1}
-          outputWidth={cropTarget === "banner" ? 1600 : 800}
-          onCancel={() => { cropTarget = null; cropFile = null; }}
-          {onCropped}
-        />
-      {/if}
-    {/if}
+  {#if cropTarget}
+    <ImageCropper
+      file={cropFile}
+      aspect={cropTarget === "banner" ? 16 / 5 : 1}
+      outputWidth={cropTarget === "banner" ? 1600 : 800}
+      onCancel={() => {
+        cropTarget = null;
+        cropFile = null;
+      }}
+      {onCropped}
+    />
+  {/if}
+{/if}
 
 <style>
-  .profilepage { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; align-items: start;
-      justify-content: start; }
-  .notfound { display: flex; flex: 1; align-items: center; justify-content: center; height: 100dvh; }
+  .profilepage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    align-items: start;
+    justify-content: start;
+  }
+  .notfound {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    height: 100dvh;
+  }
   .banner {
     position: relative;
     height: 300px;
@@ -475,23 +577,91 @@
     margin-top: -150px !important;
     flex-wrap: wrap;
   }
-  .backBtn { position: absolute; top: 20px; left: 20px; }
-  .btn2 { position: relative;}
-  .pfp { width: 300px; height: 300px; object-fit: cover; outline: 8px solid white; background-color: #efefef; }
-  .info { display: flex; flex-direction: column; gap: 6px; }
-  .info h1 { font-size: 1.8rem; font-weight: 500; }
-  .username { opacity: 0.6; font-size: 13px; }
-  .tags { display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px; align-items: center; }
-  .tag { position: relative; font-size: 12px; font-weight: 500; padding: 4px 10px; background: linear-gradient(to bottom, #ffffff70, #cecece70); color: #000000; white-space: nowrap; }
-  .actions { position: relative; margin-left: auto; display: flex; gap: 8px; }
-  .friendbtn { position: relative; font-size: 14px; padding: 8px 16px; cursor: pointer; }
-  .friendbtn:disabled { cursor: default; opacity: 0.7; }
-  .dangerBtn { color: #c0392b; }
-  .pfpwrap { position: relative; flex-shrink: 0; }
+  .backBtn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+  }
+  .btn2 {
+    position: relative;
+  }
+  .pfp {
+    width: 300px;
+    height: 300px;
+    object-fit: cover;
+    outline: 8px solid white;
+    background-color: #efefef;
+  }
+  .info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .info h1 {
+    font-size: 1.8rem;
+    font-weight: 500;
+  }
+  .username {
+    opacity: 0.6;
+    font-size: 13px;
+  }
+  .tags {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+  }
+  .tag {
+    position: relative;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    background: linear-gradient(to bottom, #ffffff70, #cecece70);
+    color: #000000;
+    white-space: nowrap;
+  }
+  .actions {
+    position: relative;
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .friendbtn {
+    position: relative;
+    font-size: 14px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  .friendbtn:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .dangerBtn {
+    color: #c0392b;
+  }
+  .pfpwrap {
+    position: relative;
+    flex-shrink: 0;
+  }
 
-  .editTitle { all: unset; font-size: 1.8rem; font-weight: 500; border-bottom: 1px solid #00000030; padding-bottom: 2px; }
-  .editSmall { all: unset; font-size: 12px; padding: 4px 10px; background: #ffffff70; border: 1px solid #00000020; }
-  .editSmall.wide { min-width: 220px; }
+  .editTitle {
+    all: unset;
+    font-size: 1.8rem;
+    font-weight: 500;
+    border-bottom: 1px solid #00000030;
+    padding-bottom: 2px;
+  }
+  .editSmall {
+    all: unset;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: #ffffff70;
+    border: 1px solid #00000020;
+  }
+  .editSmall.wide {
+    min-width: 220px;
+  }
 
   .assetUpload {
     position: absolute;
@@ -502,9 +672,20 @@
     background: linear-gradient(to bottom, #ffffff, #dedede);
     font-size: 12px;
   }
-  .assetUpload input { display: none; }
-  .bannerUpload { top: 20px; right: 20px; padding: 8px 14px; }
-  .coverUpload { bottom: 0; right: 0; width: 28px; height: 28px; }
+  .hiddenFileInput {
+    display: none;
+  }
+  .bannerUpload {
+    top: 20px;
+    right: 20px;
+    padding: 8px 14px;
+  }
+  .coverUpload {
+    bottom: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+  }
 
   .animatedUpload {
     display: block;
@@ -515,9 +696,12 @@
     cursor: pointer;
     background: linear-gradient(to bottom, #ffffff, #dedede);
   }
-  .animatedUpload input { display: none; }
 
-  .libError { font-size: 13px; color: #c0392b; padding: 10px 2rem 0 2rem; }
+  .libError {
+    font-size: 13px;
+    color: #c0392b;
+    padding: 10px 2rem 0 2rem;
+  }
 
   .trackListHeader {
     display: flex;
@@ -527,8 +711,15 @@
     padding: 20px 2rem 0 2rem;
     height: fit-content;
   }
-  .trackCount { font-size: 13px; opacity: 0.5; }
-  .rightButtonWrap { display: flex; flex-direction: row; gap: 8px; }
+  .trackCount {
+    font-size: 13px;
+    opacity: 0.5;
+  }
+  .rightButtonWrap {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+  }
 
   .addSongRow {
     display: flex;
@@ -546,19 +737,76 @@
     border: 1px solid #00000020;
   }
 
-  .trackList { display: flex; flex-direction: column; padding: 20px 2rem; gap: 2px; }
-  .emptyState { font-size: 13px; opacity: 0.5; padding: 10px 5px; }
+  .trackList {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 2rem;
+    gap: 2px;
+  }
+  .emptyState {
+    font-size: 13px;
+    opacity: 0.5;
+    padding: 10px 5px;
+  }
 
-  .songItem { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 8px; transition: background 0.15s ease; }
-  .songItem:hover { background: #00000008; }
-  .songItem.nowPlaying { background: #00000012; }
-  .playBtn { width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(to bottom, #ffffff, #dedede); }
-  .trackNum { font-size: 12px; opacity: 0.4; width: 20px; text-align: center; flex-shrink: 0; }
-  .songText { display: flex; flex-direction: column; min-width: 0; flex: 1; text-align: left; }
-  .songTitle { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .songArtist { font-size: 12px; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .songItem {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    transition: background 0.15s ease;
+  }
+  .songItem:hover {
+    background: #00000008;
+  }
+  .songItem.nowPlaying {
+    background: #00000012;
+  }
+  .playBtn {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(to bottom, #ffffff, #dedede);
+  }
+  .trackNum {
+    font-size: 12px;
+    opacity: 0.4;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .songText {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    text-align: left;
+  }
+  .songTitle {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .songArtist {
+    font-size: 12px;
+    opacity: 0.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-  .trackActions { display: flex; flex-direction: row; gap: 2px; flex-shrink: 0; }
+  .trackActions {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    flex-shrink: 0;
+  }
   .miniBtn {
     width: 22px;
     height: 22px;
@@ -570,6 +818,11 @@
     background: transparent;
     border: none;
   }
-  .miniBtn:hover:not(:disabled) { opacity: 1; }
-  .miniBtn:disabled { opacity: 0.15; cursor: default; }
+  .miniBtn:hover:not(:disabled) {
+    opacity: 1;
+  }
+  .miniBtn:disabled {
+    opacity: 0.15;
+    cursor: default;
+  }
 </style>

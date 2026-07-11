@@ -9,6 +9,7 @@
     deleteSong,
     renameSongFile,
     getSongCoverUrl,
+    backfillMissingCovers,
   } from "$lib/libraryFs.js";
   import ImportSongModal from "$lib/components/ImportSongModal.svelte";
   import AddCollectionModal from "$lib/components/AddCollectionModal.svelte";
@@ -33,6 +34,13 @@
   let importFiles = $state(null);
   let addCollectionKind = $state(null); // "Album" | "Playlist" | null
   let editingSong = $state(null); // song object | null
+
+  // --- cover backfill prompt ---
+  const COVER_PROMPT_DISMISS_KEY = "umc_coverPromptDismissed";
+  let showCoverPrompt = $state(false);
+  let coverBackfilling = $state(false);
+  let coverProgress = $state({ done: 0, total: 0 });
+  let missingCoverCount = $derived(songs.filter((s) => !s.hasCover).length);
 
   let feedItems = $derived($feedStore);
   let feedPrefs = $state({
@@ -108,6 +116,16 @@
     return `${meta?.verb ?? ""} ${song}`.trim();
   }
 
+  function maybeShowCoverPrompt() {
+    if (coverBackfilling) return;
+    try {
+      if (sessionStorage.getItem(COVER_PROMPT_DISMISS_KEY)) return;
+    } catch {
+      // sessionStorage unavailable — just fall through and ask anyway
+    }
+    showCoverPrompt = missingCoverCount > 0;
+  }
+
   async function loadLibrary() {
     if (!library?.handle) return;
     try {
@@ -118,9 +136,39 @@
       songs = result.songs;
       librarySongs.set(result.songs);
       libraryError = "";
+      maybeShowCoverPrompt();
     } catch (err) {
       console.error("Failed to scan library:", err);
       libraryError = "Could not read your library folder.";
+    }
+  }
+
+  async function acceptCoverBackfill() {
+    showCoverPrompt = false;
+    coverBackfilling = true;
+    coverProgress = { done: 0, total: missingCoverCount };
+    try {
+      await backfillMissingCovers(songsDir, songs, {
+        onCoverAdded: (song) => {
+          song.hasCover = true;
+          songs = songs; // trigger reactivity on the mutated array
+          librarySongs.set(songs);
+        },
+        onProgress: (done, total) => {
+          coverProgress = { done, total };
+        },
+      });
+    } finally {
+      coverBackfilling = false;
+    }
+  }
+
+  function declineCoverBackfill() {
+    showCoverPrompt = false;
+    try {
+      sessionStorage.setItem(COVER_PROMPT_DISMISS_KEY, "1");
+    } catch {
+      // sessionStorage unavailable — nothing to persist, just close it
     }
   }
 
@@ -287,12 +335,47 @@
           >
             ⤓ Import
           </button>
+          <button
+            class="backBtn"
+            onclick={acceptCoverBackfill}
+            disabled={!songsDir || coverBackfilling || missingCoverCount === 0}
+          >
+            {coverBackfilling
+              ? `⟳ Fetching ${coverProgress.done}/${coverProgress.total}`
+              : "⟳ Fetch Covers"}
+          </button>
           <button class="backBtn"> ❖ Library Settings </button>
         </div>
       </div>
 
       {#if libraryError}
         <p class="libError">{libraryError}</p>
+      {/if}
+
+      {#if showCoverPrompt}
+        <div class="coverPrompt rim">
+          <p class="coverPromptText">
+            {missingCoverCount}
+            {missingCoverCount === 1 ? "song is" : "songs are"} missing cover art.
+            Fetch covers automatically?
+          </p>
+          <div class="coverPromptActions">
+            <button class="backBtn" onclick={declineCoverBackfill}>
+              Not now
+            </button>
+            <button class="backBtn" onclick={acceptCoverBackfill}>
+              Fetch Covers
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      {#if coverBackfilling}
+        <div class="coverPrompt rim">
+          <p class="coverPromptText">
+            Fetching covers… {coverProgress.done}/{coverProgress.total}
+          </p>
+        </div>
       {/if}
 
       <div class="rowWrapper">
@@ -610,6 +693,29 @@
         font-size: 13px;
         color: #c0392b;
         padding: 0 15px;
+    }
+
+    .coverPrompt {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        margin: 0 0 10px 0;
+        padding: 12px 15px;
+        background: linear-gradient(to bottom, #ffffff, #eeeeee);
+    }
+
+    .coverPromptText {
+        font-size: 13px;
+        opacity: 0.75;
+    }
+
+    .coverPromptActions {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        flex-shrink: 0;
     }
 
     .songList {

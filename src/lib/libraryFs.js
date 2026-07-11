@@ -1,5 +1,7 @@
 // Library folder structure: init, scan, import, delete, and collection edits.
 
+import { fetchAlbumArtFromServer, urlToFile } from "$lib/albumArt.js";
+
 const LIST_MD_NAME = "list.md";
 const ALBUMS_DIR = "Albums";
 const PLAYLISTS_DIR = "Playlists";
@@ -175,27 +177,27 @@ async function scanCollection(parentDir, id, kind) {
     // no Assets/ folder yet — all optional, fine
   }
   const rawTracks = parseTrackList(list, kind);
-   const tracks = dedupeTracks(rawTracks);
+  const tracks = dedupeTracks(rawTracks);
 
-   if (tracks.length !== rawTracks.length) {
-     // self-heal the on-disk file so duplicate songIds don't reappear on every load
-     list.tracks = stringifyTrackList(tracks, kind);
-     await writeTextFile(collectionDir, LIST_MD_NAME, stringifyFrontmatter(list));
-   }
+  if (tracks.length !== rawTracks.length) {
+    // self-heal the on-disk file so duplicate songIds don't reappear on every load
+    list.tracks = stringifyTrackList(tracks, kind);
+    await writeTextFile(collectionDir, LIST_MD_NAME, stringifyFrontmatter(list));
+  }
 
-   return {
-     id,
-     kind,
-     name: list.name ?? "",
-     year: list.year ?? "",
-     genre: list.genre ?? "",
-     artists: Array.isArray(list.artists) ? list.artists : list.artists ? [list.artists] : [],
-     tracks,
-     artworkUrl,
-     animatedArtUrl,
-     bannerUrl,
-   };
- }
+  return {
+    id,
+    kind,
+    name: list.name ?? "",
+    year: list.year ?? "",
+    genre: list.genre ?? "",
+    artists: Array.isArray(list.artists) ? list.artists : list.artists ? [list.artists] : [],
+    tracks,
+    artworkUrl,
+    animatedArtUrl,
+    bannerUrl,
+  };
+}
 
 // Public single-collection loader — used by the Album/Playlist page.
 export async function getCollection(rootHandle, kind, id) {
@@ -335,6 +337,46 @@ export async function getSongCoverUrl(songsDir, dirname) {
     return URL.createObjectURL(await fh.getFile());
   } catch {
     return null;
+  }
+}
+
+// ---------- cover backfill ----------
+// For songs that were imported without a cover (skipped, or auto-fetch found
+// nothing at the time). Re-tries the same lookup ImportSongModal's
+// autoFetchCover does, but on demand for the whole library, gated behind an
+// explicit user choice (the UI asks before doing this — see +page.svelte).
+
+export function countMissingCovers(songs) {
+  return songs.filter((s) => !s.hasCover).length;
+}
+
+// Fetches + saves a cover for a single song. Returns true if a cover was
+// added, false if nothing was found or saving failed (best-effort either way).
+export async function backfillSongCover(songsDir, song) {
+  if (song.hasCover) return false;
+  try {
+    const { album_art } = await fetchAlbumArtFromServer(song.artist, song.title);
+    if (!album_art) return false;
+    const file = await urlToFile(album_art, "cover.webp");
+    await saveSongCover(songsDir, song.dirname, file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Walks every song missing a cover and tries to fetch+save one, one at a
+// time (sequential — this hits an external art-search API per song, so we
+// don't want to fire them all at once). Reports progress and successful
+// additions as it goes so the UI can update incrementally.
+export async function backfillMissingCovers(songsDir, songs, { onCoverAdded, onProgress } = {}) {
+  const missing = songs.filter((s) => !s.hasCover);
+  let done = 0;
+  for (const song of missing) {
+    const added = await backfillSongCover(songsDir, song);
+    if (added) onCoverAdded?.(song);
+    done += 1;
+    onProgress?.(done, missing.length);
   }
 }
 
