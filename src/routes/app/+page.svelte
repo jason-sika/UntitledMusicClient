@@ -10,6 +10,8 @@
     renameSongFile,
     getSongCoverUrl,
     backfillMissingCovers,
+    scanFolderForAudio,
+    filterAudioFileList,
   } from "$lib/libraryFs.js";
   import ImportSongModal from "$lib/components/ImportSongModal.svelte";
   import AddCollectionModal from "$lib/components/AddCollectionModal.svelte";
@@ -34,6 +36,8 @@
   let importFiles = $state(null);
   let addCollectionKind = $state(null); // "Album" | "Playlist" | null
   let editingSong = $state(null); // song object | null
+  let folderWarning = $state("");
+  let folderInputRef;
 
   // --- cover backfill prompt ---
   const COVER_PROMPT_DISMISS_KEY = "umc_coverPromptDismissed";
@@ -78,6 +82,49 @@
       like: "showFeedLikes",
       presence_change: "showFeedPresence",
     }[kind];
+  }
+
+  async function handleImportFolderClick() {
+    if (!songsDir) return;
+    folderWarning = "";
+
+    if ("showDirectoryPicker" in window) {
+      let dirHandle;
+      try {
+        dirHandle = await window.showDirectoryPicker();
+      } catch (err) {
+        if (err.name !== "AbortError") console.error(err);
+        return;
+      }
+      const { files, skippedDrm, skippedUnknown } =
+        await scanFolderForAudio(dirHandle);
+      applyFolderScanResult(files, skippedDrm, skippedUnknown);
+    } else {
+      // Fallback for contexts where directory picking isn't available
+      // (mirrors the same FileSystemHandle limitations you've hit with Helium
+      // elsewhere) — falls back to a plain webkitdirectory input.
+      folderInputRef.click();
+    }
+  }
+
+  function handleFolderInputChange(e) {
+    const { files, skippedDrm, skippedUnknown } = filterAudioFileList(
+      e.target.files,
+    );
+    e.target.value = "";
+    applyFolderScanResult(files, skippedDrm, skippedUnknown);
+  }
+
+  function applyFolderScanResult(files, skippedDrm, skippedUnknown) {
+    if (skippedDrm.length) {
+      folderWarning = `Skipped ${skippedDrm.length} DRM-protected file${skippedDrm.length > 1 ? "s" : ""} (Apple Music/iTunes downloads can't be imported).`;
+    }
+    if (!files.length) {
+      folderWarning =
+        folderWarning || "No supported audio files found in that folder.";
+      return;
+    }
+    importFiles = files;
   }
 
   const visibleFeedItems = $derived(
@@ -316,10 +363,9 @@
                         </div>
                         <button
                           class="previewBtn"
-                          onclick={() => previewSong(song)}
+                          onclick={() => playSong(song)}
                           aria-label="Preview"
                         >
-                          ►
                         </button>
                       </div>
                     {/each}
@@ -337,6 +383,21 @@
           </button>
           <button
             class="backBtn"
+            onclick={handleImportFolderClick}
+            disabled={!songsDir}
+          >
+            ⤓ Import Folder
+          </button>
+          <input
+            type="file"
+            webkitdirectory
+            multiple
+            class="hiddenFileInput"
+            bind:this={folderInputRef}
+            onchange={handleFolderInputChange}
+          />
+          <button
+            class="backBtn"
             onclick={acceptCoverBackfill}
             disabled={!songsDir || coverBackfilling || missingCoverCount === 0}
           >
@@ -350,6 +411,9 @@
 
       {#if libraryError}
         <p class="libError">{libraryError}</p>
+      {/if}
+      {#if folderWarning}
+        <p class="libError">{folderWarning}</p>
       {/if}
 
       {#if showCoverPrompt}
@@ -612,6 +676,8 @@
         position: relative;
         background: linear-gradient(to bottom, #ffffff, #eeeeee);
     }
+
+    .hiddenFileInput { display: none; }
 
     .titleBarRow {
         width: 100%;

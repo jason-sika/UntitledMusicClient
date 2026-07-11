@@ -306,6 +306,80 @@ async function nextSongId(songsDir) {
   return max + 1;
 }
 
+// ---------- folder import (recursive scan for audio files) ----------
+
+const AUDIO_EXTENSIONS = new Set([
+  "mp3", "m4a", "flac", "wav", "ogg", "opus", "aac", "wma", "aiff", "alac",
+]);
+
+// .m4p is Apple's legacy FairPlay-DRM-wrapped format (old iTunes Store
+// purchases / anything still under active DRM). These can't be decoded by
+// a normal <audio> element or any non-Apple player, so we detect and skip
+// them by extension rather than importing a file that'll just fail later.
+const DRM_EXTENSIONS = new Set(["m4p"]);
+
+// Recursively walks a directory handle (from showDirectoryPicker()) and
+// collects every audio file found at any depth. Returns usable files plus
+// anything skipped for being DRM-protected, so the caller can tell the user
+// instead of silently dropping them.
+export async function scanFolderForAudio(dirHandle, { maxDepth = 12 } = {}) {
+  const files = [];
+  const skippedDrm = [];
+  const skippedUnknown = [];
+
+  async function walk(handle, depth, path) {
+    if (depth > maxDepth) return;
+    for await (const [name, childHandle] of handle.entries()) {
+      const childPath = path ? `${path}/${name}` : name;
+      if (childHandle.kind === "directory") {
+        await walk(childHandle, depth + 1, childPath);
+        continue;
+      }
+      const ext = (name.split(".").pop() || "").toLowerCase();
+      if (DRM_EXTENSIONS.has(ext)) {
+        skippedDrm.push(childPath);
+        continue;
+      }
+      if (!AUDIO_EXTENSIONS.has(ext)) {
+        skippedUnknown.push(childPath);
+        continue;
+      }
+      const file = await childHandle.getFile();
+      files.push(file);
+    }
+  }
+
+  await walk(dirHandle, 0, "");
+  return { files, skippedDrm, skippedUnknown };
+}
+
+// Fallback for contexts using <input type="file" webkitdirectory multiple>
+// instead of showDirectoryPicker() (relevant given Helium's FileSystemHandle
+// persistence issues you've already hit elsewhere). FileList entries expose
+// .webkitRelativePath instead of a handle chain, so filtering is duplicated
+// here rather than shared with the walker above.
+export function filterAudioFileList(fileList) {
+  const files = [];
+  const skippedDrm = [];
+  const skippedUnknown = [];
+
+  for (const file of fileList) {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const path = file.webkitRelativePath || file.name;
+    if (DRM_EXTENSIONS.has(ext)) {
+      skippedDrm.push(path);
+      continue;
+    }
+    if (!AUDIO_EXTENSIONS.has(ext)) {
+      skippedUnknown.push(path);
+      continue;
+    }
+    files.push(file);
+  }
+
+  return { files, skippedDrm, skippedUnknown };
+}
+
 // ---------- import ----------
 
 export async function importSong(songsDir, file, metadata) {
